@@ -89,7 +89,15 @@ colourblindness and monochrome menu bar rendering. A short text label appears al
 `always | never | whenNotOK`, default `whenNotOK`. Clicking opens the detail panel listing each
 Fact, which interface carries the default route, and recent Transitions.
 
-`MenuBarExtra` with `.window` style; `LSUIElement` set so there is no Dock icon.
+`NSStatusItem` with an `NSPopover`, not `MenuBarExtra`; `LSUIElement` set so there is no Dock icon.
+
+The switch was made while diagnosing an invisible menu bar item, and the diagnosis was wrong — a
+menu bar manager (Barbee) was hiding it, and `MenuBarExtra` would very likely have worked. The
+switch was kept anyway for one reason: `MenuBarExtra` cannot report whether an item exists, how wide
+it is, or where it was placed, so "why can't I see it" is unanswerable without someone looking at a
+screen. `NSStatusItem` logs its own geometry, which is what finally identified the cause — the item
+was 82pt wide with its symbol resolved, at y 1084–1117 (correctly in the menu bar strip) and
+x −9366 on a 1728-wide screen.
 
 Settings open via a `Window` scene, `openWindow`, and `NSApp.activate()`. Apple's blessed
 `Settings` scene with `SettingsLink`/`openSettings` does not front reliably from an `.accessory`
@@ -106,10 +114,25 @@ login, and the list of active Mutes.
 
 ## State
 
-`UserDefaults` for settings and Mutes. The last ~50 Transitions are held in memory only and are
-lost on quit — including the auto-start after every reboot. Persisting them would make the app
-useful for forensics and would also create a file recording the user's network history, which is
-itself a privacy artifact worth protecting. Revisit only with a retention policy.
+`UserDefaults` for settings and Mutes. The last ~50 Transitions are held in memory for the detail
+panel and are lost on quit.
+
+Transitions are **also** appended to a JSONL journal at
+`~/Library/Application Support/ShieldStat/transitions.jsonl`. This reverses the original decision to
+keep history in memory only. That decision assumed the trade was "forensic value versus owning a
+file of the user's network history" — but with launch at login, the in-memory buffer only ever
+covers the time since the last reboot, so the app could not answer the questions a trial exists to
+ask. Unified logging was tried first and persists nothing for an ad-hoc-signed bundle.
+
+The privacy objection is answered by what gets written, not by refusing to write: a record holds the
+timestamp, both Severities, the State, the interface names, and the **Address Classes** — never an
+address. "globalV4 on en0" answers how often and whether it flapped; the address itself adds nothing
+a trial needs.
+
+Retention is the policy the original decision asked for: 14 days, pruned once at launch rather than
+on every append, with a 5,000-record hard cap as a backstop against a pathological flap. Encoding
+and retention live in `TransitionJournal`, which is pure and tested; the file adapter only touches
+the disk. A corrupt line loses one record, never the file.
 
 Launch at login uses `SMAppService.mainApp`, revocable by the user in System Settings.
 
@@ -135,20 +158,16 @@ real `ifconfig` output, CGNAT, multi-GUA SLAAC, and secondary-interface exposure
   others' behalf.
 - **Developer ID signing and notarization.** Blocks handing a build to a friend, since Gatekeeper
   refuses unsigned apps and the override is buried. Packaging, not architecture.
-- **Persisted Transition history.**
 - **Any settings beyond the five listed above.**
 
 ## Dogfooding instrumentation
 
-Transitions are written to unified logging (`subsystem: dev.lucascaro.ShieldStat`, category
-`transitions`) as well as the in-memory ring buffer. The buffer dies on quit, and with launch at
-login enabled that means every reboot — so a week-long trial would otherwise only ever show
-"since the last restart". Unified logging already persists, rotates, and ages out on its own, which
-gets a real trial's worth of data without this project owning a file of the user's network history.
-
 Review a trial with:
 
-    log show --predicate 'subsystem == "dev.lucascaro.ShieldStat"' --last 7d --style compact
+    jq -r '"\(.at) \(.state) \(.from)->\(.to) \(.interfaces|join(","))"' \
+      ~/Library/Application\ Support/ShieldStat/transitions.jsonl
 
-Fields are marked `.public` deliberately: interface names and severity names, no addresses. If the
-persisted Transition log in Deferred is ever built, this is the thing it replaces.
+Transitions are also emitted to unified logging (`subsystem: dev.lucascaro.ShieldStat`). That
+channel persists **nothing** for an ad-hoc-signed bundle — measured: zero entries by subsystem or by
+process name. It is left in place because it should start working under a real signature, but the
+JSONL journal is the one to trust.

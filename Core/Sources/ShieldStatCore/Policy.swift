@@ -1,14 +1,14 @@
 import Foundation
 
 /// How much a state should worry you.
-public enum Severity: Int, Sendable, Comparable, CaseIterable {
+public enum Severity: Int, Sendable, Comparable, CaseIterable, Codable {
     case ok, notice, alert
 
     public static func < (lhs: Severity, rhs: Severity) -> Bool { lhs.rawValue < rhs.rawValue }
 }
 
 /// The user-facing name for a situation. Produced by Policy, never by a Sensor.
-public enum PostureState: String, Sendable, CaseIterable {
+public enum PostureState: String, Sendable, CaseIterable, Codable {
     case offline
     case noNetwork
     case carrierNAT

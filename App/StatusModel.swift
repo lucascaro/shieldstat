@@ -20,6 +20,7 @@ final class StatusModel {
 
     private var tracker: SeverityTracker
     private var started = false
+    private let journal = TransitionLog()
     private let settings: AppSettings
     private let notifier: Notifier
     private let monitor = NWPathMonitor()
@@ -48,6 +49,7 @@ final class StatusModel {
     func start() {
         guard !started else { return }
         started = true
+        journal.pruneOnLaunch()
 
         monitor.pathUpdateHandler = { [weak self] _ in
             Task { @MainActor in self?.evaluate() }
@@ -100,10 +102,11 @@ final class StatusModel {
         history.insert(transition, at: 0)
         if history.count > Self.historyLimit { history.removeLast() }
 
-        // The in-memory ring buffer dies on quit, and with launch-at-login that
-        // means every reboot. Unified logging already persists, rotates, and
-        // ages out on its own, so a week of real transitions survives without
-        // us owning a file of the user's network history.
+        // The in-memory ring buffer dies on quit, and with launch at login that
+        // means every reboot. The journal is what makes a multi-day trial
+        // answerable; it records address classes, never addresses.
+        journal.append(transition)
+
         Self.log.notice("""
             transition \(transition.from.name, privacy: .public) -> \
             \(transition.to.name, privacy: .public) \
