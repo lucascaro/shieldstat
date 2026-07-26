@@ -4,28 +4,17 @@ import ShieldStatCore
 
 @main
 struct ShieldStatApp: App {
-    @State private var settings: AppSettings
-    @State private var model: StatusModel
-
-    init() {
-        let settings = AppSettings()
-        _settings = State(initialValue: settings)
-        _model = State(initialValue: StatusModel(settings: settings))
-    }
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        MenuBarExtra {
-            StatusPanel(model: model, settings: settings)
-        } label: {
-            MenuBarLabel(model: model, settings: settings)
-        }
-        .menuBarExtraStyle(.window)
-
-        // Not a `Settings` scene: `openSettings` does not front a window from an
-        // `.accessory` app on macOS 26. `openWindow` + `NSApp.activate()` does,
-        // and is entirely public API. Both calls are required.
+        // The menu bar item is an NSStatusItem owned by AppDelegate, not a
+        // MenuBarExtra — see the note there.
+        //
+        // This is not a `Settings` scene: `openSettings` does not front a
+        // window from an `.accessory` app on macOS 26. `openWindow` +
+        // `NSApp.activate()` does, and is entirely public API. Both required.
         Window("ShieldStat Settings", id: SettingsWindow.id) {
-            SettingsView(settings: settings, model: model)
+            SettingsView(settings: delegate.settings, model: delegate.model)
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
@@ -34,28 +23,4 @@ struct ShieldStatApp: App {
 
 enum SettingsWindow {
     static let id = "settings"
-}
-
-private struct MenuBarLabel: View {
-    let model: StatusModel
-    let settings: AppSettings
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: model.observedSeverity.symbolName)
-            if showLabel { Text(model.verdict.state.shortLabel) }
-        }
-        .task {
-            await model.notifierAuthorization()
-            model.start()
-        }
-    }
-
-    private var showLabel: Bool {
-        switch settings.labelDisplay {
-        case .always: true
-        case .never: false
-        case .whenNotOK: model.observedSeverity != .ok
-        }
-    }
 }

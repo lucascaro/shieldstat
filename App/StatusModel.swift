@@ -26,6 +26,10 @@ final class StatusModel {
     private var safetyPoll: Timer?
     private var settleTimer: Timer?
 
+    /// Called after every evaluation so the menu bar item can redraw. The
+    /// status item is AppKit, so it does not observe the model automatically.
+    var onUpdate: (() -> Void)?
+
     private static let historyLimit = 50
     private static let safetyPollInterval: TimeInterval = 300
 
@@ -89,6 +93,7 @@ final class StatusModel {
             }
         }
         scheduleSettleWake()
+        onUpdate?()
     }
 
     private func record(_ transition: Transition) {
