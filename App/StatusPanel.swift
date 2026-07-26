@@ -108,14 +108,19 @@ struct StatusPanel: View {
 
             ForEach(model.verdict.raisingListeners, id: \.self) { listener in
                 HStack(spacing: 6) {
+                    if model.verdict.state != .exposedService {
+                        Button { model.dismiss(listener) } label: {
+                            Image(systemName: "xmark.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                        .help("Dismiss \(listener.label) — expected on this machine")
+                        .accessibilityLabel("Dismiss \(listener.label)")
+                    }
                     Text(listener.label).font(.system(.caption, design: .monospaced))
                     Spacer()
                     if model.verdict.state == .exposedService {
                         Text("reachable").font(.caption2).foregroundStyle(.red)
-                    } else {
-                        Button("Dismiss") { model.dismiss(listener) }
-                            .buttonStyle(.link)
-                            .font(.caption2)
                     }
                 }
             }
