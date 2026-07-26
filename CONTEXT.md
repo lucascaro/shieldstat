@@ -90,7 +90,9 @@ Muting is not blinding.
 _Avoid_: Ignore, disable, snooze (Snooze is one kind of Mute), exception
 
 **Snooze**:
-A Mute bounded by time. The only kind of Mute permitted against `alert` Severity.
+A Mute bounded by time, applied to exactly the Facts currently raising the Severity. The only kind
+of Mute permitted against `alert` Severity. Not a separate suppression channel — a Snooze appears
+in the list of Mutes and is revoked the same way.
 _Avoid_: Pause, defer, remind me later
 
 **Fact Mute**:

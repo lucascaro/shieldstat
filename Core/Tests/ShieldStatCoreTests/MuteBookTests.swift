@@ -82,14 +82,27 @@ struct MuteBookTests {
         #expect(book.shouldNotify(mixed, at: t0) == true)
     }
 
-    @Test("A snooze suppresses everything for its duration")
-    func blanketSnooze() {
+    @Test("Snoozing a transition mutes exactly the classes that raised it, visibly")
+    func snoozeRaisingClasses() throws {
         var book = MuteBook()
-        book.snooze(until: t0.addingTimeInterval(3600))
+        let t = transition(from: .ok, to: .alert, raising: [fact("en0", .globalV4), fact("en5", .globalV6)])
 
-        let t = transition(from: .ok, to: .alert, raising: [fact("en0", .globalV4)])
+        try book.snooze(t.verdict, until: t0.addingTimeInterval(3600), now: t0)
+
+        #expect(Set(book.activeMutes(at: t0).map(\.addressClass)) == [.globalV4, .globalV6])
         #expect(book.shouldNotify(t, at: t0.addingTimeInterval(60)) == false)
         #expect(book.shouldNotify(t, at: t0.addingTimeInterval(7200)) == true)
+    }
+
+    @Test("Every suppression is listed and revocable — there is no hidden channel")
+    func noHiddenSuppression() throws {
+        var book = MuteBook()
+        let t = transition(from: .ok, to: .alert, raising: [fact("en0", .globalV4)])
+        try book.snooze(t.verdict, until: t0.addingTimeInterval(3600), now: t0)
+
+        #expect(book.shouldNotify(t, at: t0.addingTimeInterval(60)) == false)
+        for mute in book.activeMutes(at: t0) { book.unmute(mute.addressClass) }
+        #expect(book.shouldNotify(t, at: t0.addingTimeInterval(60)) == true)
     }
 
     @Test("Mutes are keyed to the address class, never to an interface — ADR-0002")

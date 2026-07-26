@@ -15,6 +15,7 @@ Classifies every address on every up, running, non-loopback interface:
 | `2000::/3` | `globalV6` |
 | other IPv4 | `globalV4` |
 | `127/8`, `::1`, `fe80::/10` | excluded |
+| `0/8`, `224/4`–`255/4`, `ff00::/8` | excluded — unspecified, multicast, reserved, broadcast |
 
 `carrierNAT` is `ok` and silent. It is the one row where the app knows less than it appears to:
 Tailscale's mesh and a carrier's CGNAT are indistinguishable from these bits alone. Both are
@@ -94,6 +95,11 @@ useful for forensics and would also create a file recording the user's network h
 itself a privacy artifact worth protecting. Revisit only with a retention policy.
 
 Launch at login uses `SMAppService.mainApp`, revocable by the user in System Settings.
+
+## Naming deviation
+
+The glossary term is **State**; the Swift type is `PostureState`. A type named `State` is ambiguous
+with SwiftUI's property wrapper in every view file. The glossary word is unchanged.
 
 ## Build
 

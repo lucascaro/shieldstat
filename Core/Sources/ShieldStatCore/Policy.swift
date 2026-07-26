@@ -46,6 +46,11 @@ public enum Policy {
         return Verdict(state: worst, severity: severity(of: worst), raisingFacts: raising)
     }
 
+    /// The severity a single address class carries on its own.
+    public static func severity(raisedBy addressClass: AddressClass) -> Severity {
+        severity(of: state(for: addressClass))
+    }
+
     private static func state(for addressClass: AddressClass) -> PostureState {
         switch addressClass {
         case .private: .private

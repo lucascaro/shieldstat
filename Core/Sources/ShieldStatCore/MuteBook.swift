@@ -24,13 +24,14 @@ public enum MuteError: Error, Equatable {
 /// Suppresses notifications. Never suppresses the glyph — muting is not
 /// blinding, and the glyph never lies.
 public struct MuteBook: Sendable, Equatable, Codable {
+    /// The only suppression channel. There is deliberately no second, hidden
+    /// one — every active mute is listed and individually revocable (ADR-0002).
     private var mutes: [FactMute] = []
-    private var snoozedUntil: Date?
 
     public init() {}
 
     public mutating func mute(_ addressClass: AddressClass, since: Date, until: Date?) throws {
-        if until == nil, severity(of: addressClass) == .alert {
+        if until == nil, Policy.severity(raisedBy: addressClass) == .alert {
             throw MuteError.alertCannotBeMutedPermanently(addressClass)
         }
         mutes.removeAll { $0.addressClass == addressClass }
@@ -41,31 +42,27 @@ public struct MuteBook: Sendable, Equatable, Codable {
         mutes.removeAll { $0.addressClass == addressClass }
     }
 
-    /// A blanket "not now" across every class, always time-bounded.
-    public mutating func snooze(until: Date) {
-        snoozedUntil = until
+    /// "Not now" for one transition: mutes exactly the classes that raised it,
+    /// time-bounded, and visible in settings like any other mute.
+    public mutating func snooze(_ verdict: Verdict, until: Date, now: Date) throws {
+        for addressClass in Set(verdict.raisingFacts.map(\.addressClass)) {
+            try mute(addressClass, since: now, until: until)
+        }
     }
 
     public func activeMutes(at now: Date) -> [FactMute] {
-        mutes.filter { $0.isActive(at: now) }
+        mutes.filter { $0.isActive(at: now) }.sorted { $0.addressClass.rawValue < $1.addressClass.rawValue }
     }
 
     /// A worsening transition notifies unless every fact that raised the
     /// severity is muted.
     public func shouldNotify(_ transition: Transition, at now: Date) -> Bool {
         guard transition.isWorsening else { return false }
-        if let snoozedUntil, now < snoozedUntil { return false }
 
         let muted = Set(activeMutes(at: now).map(\.addressClass))
         let raising = Set(transition.verdict.raisingFacts.map(\.addressClass))
 
         guard !raising.isEmpty else { return true }
         return !raising.isSubset(of: muted)
-    }
-
-    private func severity(of addressClass: AddressClass) -> Severity {
-        Policy.evaluate([Fact(
-            interface: "", addressClass: addressClass, count: 1, carriesDefaultRoute: false
-        )]).severity
     }
 }

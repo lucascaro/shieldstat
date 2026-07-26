@@ -15,6 +15,9 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFileReference section */
+		A10000A1 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
+		A10000A2 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
+		A10000A3 /* ShieldStat.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShieldStat.entitlements; sourceTree = "<group>"; };
 		A1000020 /* ShieldStat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShieldStat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -34,8 +37,19 @@
 			isa = PBXGroup;
 			children = (
 				A1000010 /* App */,
+				A10000A0 /* Config */,
 				A1000001 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		A10000A0 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				A10000A1 /* Shared.xcconfig */,
+				A10000A2 /* App.xcconfig */,
+				A10000A3 /* ShieldStat.entitlements */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		A1000001 /* Products */ = {
@@ -132,69 +146,43 @@
 /* Begin XCBuildConfiguration section */
 		A1000004 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000A1 /* Shared.xcconfig */;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ENABLE_OBJC_WEAK = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
 		A1000005 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000A1 /* Shared.xcconfig */;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ENABLE_OBJC_WEAK = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
 		A1000071 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000A2 /* App.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.lucascaro.ShieldStat;
-				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Debug;
 		};
 		A1000072 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A10000A2 /* App.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.lucascaro.ShieldStat;
-				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Release;

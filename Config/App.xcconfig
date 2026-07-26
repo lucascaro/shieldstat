@@ -1,0 +1,15 @@
+#include "Shared.xcconfig"
+
+PRODUCT_NAME = $(TARGET_NAME)
+PRODUCT_BUNDLE_IDENTIFIER = dev.lucascaro.ShieldStat
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+
+// No Dock icon, no app menu: this is a menu bar accessory.
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_KEY_LSUIElement = YES
+
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_ENTITLEMENTS = Config/ShieldStat.entitlements
+ENABLE_HARDENED_RUNTIME = YES
+COMBINE_HIDPI_IMAGES = YES

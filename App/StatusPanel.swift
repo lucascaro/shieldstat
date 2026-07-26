@@ -13,6 +13,10 @@ struct StatusPanel: View {
             header
             Divider()
             factList
+            if model.observedSeverity != .ok {
+                Divider()
+                muteControls
+            }
             if !model.history.isEmpty {
                 Divider()
                 historyList
@@ -76,6 +80,33 @@ struct StatusPanel: View {
                 }
             }
         }
+    }
+
+    /// Direct exposure can be snoozed but never permanently silenced — the
+    /// permanent option only appears for classes below alert severity.
+    private var muteControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("Quiet notifications").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("1 hour") { model.snoozeCurrent(for: 3600) }
+                Button("Until tomorrow") { model.snoozeCurrent(for: 86_400) }
+            }
+            ForEach(permanentlyMutableClasses, id: \.self) { addressClass in
+                Button("Always ignore \(addressClass.title)") { model.mutePermanently(addressClass) }
+                    .font(.caption)
+            }
+        }
+        .buttonStyle(.link)
+        .font(.caption)
+    }
+
+    private var permanentlyMutableClasses: [AddressClass] {
+        let raising = Set(model.verdict.raisingFacts.map(\.addressClass))
+        let alreadyMuted = Set(settings.muteBook.activeMutes(at: Date()).map(\.addressClass))
+        return raising
+            .filter { Policy.severity(raisedBy: $0) != .alert && !alreadyMuted.contains($0) }
+            .sorted { $0.rawValue < $1.rawValue }
     }
 
     private var footer: some View {

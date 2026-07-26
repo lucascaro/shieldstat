@@ -66,6 +66,16 @@ struct AddressClassTests {
         #expect(AddressClass.of(text) == nil)
     }
 
+    @Test("Non-unicast addresses are not exposure, whatever their bits say", arguments: [
+        "0.0.0.0", "0.1.2.3",           // unspecified
+        "224.0.0.1", "239.255.255.250", // multicast
+        "240.0.0.1", "255.255.255.255", // reserved and broadcast
+        "ff02::1",                      // IPv6 multicast
+    ])
+    func nonUnicastIsNotExposure(text: String) {
+        #expect(AddressClass.of(text) == nil)
+    }
+
     @Test("Unparseable text is not classified")
     func garbage() {
         #expect(AddressClass.of("not-an-address") == nil)

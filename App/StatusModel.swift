@@ -16,9 +16,9 @@ final class StatusModel {
     private(set) var history: [Transition] = []
 
     var observedSeverity: Severity { verdict.severity }
-    var settledSeverity: Severity { tracker.settledSeverity ?? verdict.severity }
 
     private var tracker: SeverityTracker
+    private var started = false
     private let settings: AppSettings
     private let notifier: Notifier
     private let monitor = NWPathMonitor()
@@ -38,7 +38,12 @@ final class StatusModel {
         await notifier.requestAuthorization()
     }
 
+    /// Idempotent: the menu bar label's `.task` can run more than once, and
+    /// restarting an already-started NWPathMonitor is not harmless.
     func start() {
+        guard !started else { return }
+        started = true
+
         monitor.pathUpdateHandler = { [weak self] _ in
             Task { @MainActor in self?.evaluate() }
         }
@@ -50,12 +55,22 @@ final class StatusModel {
         evaluate()
     }
 
-    /// Rebuilds the tracker when debounce settings change. The current settled
-    /// severity is deliberately discarded — the next evaluation settles silently,
-    /// so changing a setting is not itself an event.
+    /// Retimes the tracker when debounce settings change, keeping the settled
+    /// baseline — otherwise nudging the slider would re-baseline a pending
+    /// worsening and swallow the notification it was about to produce.
     func settingsChanged() {
-        tracker = SeverityTracker(debounce: settings.debounceSeconds, bypassing: settings.bypassing)
+        tracker.reconfigure(debounce: settings.debounceSeconds, bypassing: settings.bypassing)
         evaluate()
+    }
+
+    /// Suppresses notifications about whatever is currently raising the
+    /// severity. Visible and revocable in settings like any other mute.
+    func snoozeCurrent(for duration: TimeInterval, now: Date = Date()) {
+        try? settings.muteBook.snooze(verdict, until: now.addingTimeInterval(duration), now: now)
+    }
+
+    func mutePermanently(_ addressClass: AddressClass, now: Date = Date()) {
+        try? settings.muteBook.mute(addressClass, since: now, until: nil)
     }
 
     func evaluate(now: Date = Date()) {

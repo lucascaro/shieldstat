@@ -17,8 +17,8 @@ public struct Transition: Sendable, Equatable {
 /// moves once a reading has held still — except into a bypass severity, where
 /// waiting 30 seconds to mention that you are on the open internet is absurd.
 public struct SeverityTracker: Sendable {
-    private let debounce: TimeInterval
-    private let bypassing: Set<Severity>
+    private var debounce: TimeInterval
+    private var bypassing: Set<Severity>
 
     public private(set) var observedSeverity: Severity?
     public private(set) var settledSeverity: Severity?
@@ -27,6 +27,15 @@ public struct SeverityTracker: Sendable {
     public init(debounce: TimeInterval = 30, bypassing: Set<Severity> = [.alert]) {
         self.debounce = debounce
         self.bypassing = bypassing
+    }
+
+    /// Changes the timing without discarding the settled baseline. Rebuilding
+    /// the tracker instead would make the next evaluation settle silently, so
+    /// nudging a slider could swallow a worsening that was already pending.
+    public mutating func reconfigure(debounce: TimeInterval, bypassing: Set<Severity>) {
+        self.debounce = debounce
+        self.bypassing = bypassing
+        candidate = nil
     }
 
     /// When the pending candidate would settle, so the app can schedule a wake.

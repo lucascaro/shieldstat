@@ -29,7 +29,7 @@ extension PostureState {
 
     var explanation: String {
         switch self {
-        case .offline: "No active network interfaces."
+        case .offline: "No interface holds a usable address."
         case .noNetwork: "An interface is up but has no address — DHCP has not completed."
         case .carrierNAT: "Addresses sit in carrier NAT space. Not reachable from the internet."
         case .private: "Every address is private. Something is NATing this Mac."

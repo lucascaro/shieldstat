@@ -140,6 +140,34 @@ struct SeverityTrackerTests {
         #expect(tracker.observe(verdict(.alert), at: t0.addingTimeInterval(51))?.to == .alert)
     }
 
+    @Test("Reconfiguring keeps the settled baseline, so a pending worsening still notifies")
+    func reconfigurePreservesBaseline() {
+        var tracker = SeverityTracker(debounce: 30, bypassing: [])
+        _ = tracker.observe(verdict(.ok), at: t0)
+        _ = tracker.observe(verdict(.notice), at: t0.addingTimeInterval(1))
+
+        // User nudges the debounce slider while a worsening is pending.
+        tracker.reconfigure(debounce: 10, bypassing: [])
+        #expect(tracker.settledSeverity == .ok)
+
+        // The window restarts under the new duration, but the baseline it will
+        // be compared against is still ok — so the worsening is not swallowed.
+        #expect(tracker.observe(verdict(.notice), at: t0.addingTimeInterval(20)) == nil)
+        let settled = tracker.observe(verdict(.notice), at: t0.addingTimeInterval(31))
+        #expect(settled?.to == .notice)
+        #expect(settled?.from == .ok)
+    }
+
+    @Test("Reconfiguring restarts the pending window under the new duration")
+    func reconfigureRestartsCandidate() {
+        var tracker = SeverityTracker(debounce: 30, bypassing: [])
+        _ = tracker.observe(verdict(.ok), at: t0)
+        _ = tracker.observe(verdict(.notice), at: t0.addingTimeInterval(1))
+        tracker.reconfigure(debounce: 120, bypassing: [])
+
+        #expect(tracker.observe(verdict(.notice), at: t0.addingTimeInterval(40)) == nil)
+    }
+
     @Test("The settled verdict carries the facts that raised it")
     func settledVerdictCarriesFacts() {
         var tracker = SeverityTracker()

@@ -30,17 +30,11 @@ final class Notifier {
 }
 
 extension Verdict {
+    /// The state's own words, plus which interfaces are responsible. Keeping one
+    /// source of prose means adding a state cannot leave the two out of step.
     var detail: String {
-        let interfaces = raisingFacts.map(\.interface).joined(separator: ", ")
-        return switch state {
-        case .directlyExposed:
-            "A globally-routable IPv4 address is assigned to \(interfaces). Nothing is NATing this Mac."
-        case .publiclyAddressable:
-            "A globally-routable IPv6 address is assigned to \(interfaces)."
-        case .private: "All addresses are private."
-        case .carrierNAT: "Addresses are in carrier NAT space."
-        case .noNetwork: "No address assigned — DHCP has not completed."
-        case .offline: "No active network interfaces."
-        }
+        let interfaces = raisingFacts.map(\.interface).sorted().joined(separator: ", ")
+        guard !interfaces.isEmpty else { return state.explanation }
+        return "\(state.explanation) (\(interfaces))"
     }
 }

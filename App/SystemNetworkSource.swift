@@ -6,7 +6,7 @@ import ShieldStatCore
 /// system; everything downstream is a pure function over what it returns.
 enum SystemNetworkSource {
     static func snapshot() -> (addresses: [InterfaceAddress], defaultRouteInterfaces: Set<String>) {
-        (addresses(), primaryInterfaces())
+        (addresses(), defaultRouteInterfaces())
     }
 
     static func addresses() -> [InterfaceAddress] {
@@ -45,7 +45,7 @@ enum SystemNetworkSource {
 
     /// Which interfaces carry a default route. Display metadata only — it never
     /// modifies severity (ADR-0003).
-    private static func primaryInterfaces() -> Set<String> {
+    private static func defaultRouteInterfaces() -> Set<String> {
         guard let store = SCDynamicStoreCreate(nil, "ShieldStat" as CFString, nil, nil) else { return [] }
         let keys = ["State:/Network/Global/IPv4", "State:/Network/Global/IPv6"]
         return Set(keys.compactMap { key in

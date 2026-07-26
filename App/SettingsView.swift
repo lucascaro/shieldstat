@@ -43,7 +43,7 @@ struct SettingsView: View {
                         }
                     }
                 }
-                Text("Mutes suppress notifications only. The menu bar always shows the true status, and nothing that means direct exposure can be silenced permanently.")
+                Text("Mutes suppress notifications only. The menu bar always shows the true severity, and nothing that means direct exposure can be silenced permanently.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

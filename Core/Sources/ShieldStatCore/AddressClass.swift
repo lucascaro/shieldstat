@@ -28,7 +28,9 @@ extension AddressClass {
     static func of(_ address: IPv4Address) -> AddressClass? {
         let b = Array(address.rawValue)
         switch (b[0], b[1]) {
+        case (0, _): return nil                                  // unspecified
         case (127, _): return nil                                // loopback
+        case (224...255, _): return nil                          // multicast, reserved, broadcast
         case (10, _): return .private
         case (172, 16...31): return .private
         case (192, 168): return .private
@@ -41,6 +43,7 @@ extension AddressClass {
     static func of(_ address: IPv6Address) -> AddressClass? {
         let b = Array(address.rawValue)
         if b == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1] { return nil }  // ::1
+        if b[0] == 0xff { return nil }                                           // ff00::/8 multicast
         if b[0] == 0xfe, b[1] & 0xc0 == 0x80 { return nil }                      // fe80::/10
         if b[0] & 0xfe == 0xfc { return .private }                               // fc00::/7 ULA
         if b[0] & 0xe0 == 0x20 { return .globalV6 }                              // 2000::/3
