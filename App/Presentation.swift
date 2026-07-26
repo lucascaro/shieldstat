@@ -25,7 +25,10 @@ extension PostureState {
         case .private: "Private"
         case .publiclyAddressable: "Public v6"
         case .directlyExposed: "Exposed"
-        case .exposedService: "Open Port"
+        // Strictly worse than Directly Exposed, so it must not read milder.
+        // The headline fact is the exposure; which ports are open is panel
+        // detail, and the two states already share a severity and a glyph.
+        case .exposedService: "Exposed"
         }
     }
 

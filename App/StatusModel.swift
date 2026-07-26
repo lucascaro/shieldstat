@@ -1,11 +1,10 @@
 import Foundation
-import Network
 import Observation
 import OSLog
 import ShieldStatCore
 
-/// Drives evaluation: network path events, a safety poll, and a wake timed to
-/// the debounce deadline so a pending change settles even if nothing else
+/// Drives evaluation: routing-socket events, a safety poll, and a wake timed
+/// to the debounce deadline so a pending change settles even if nothing else
 /// happens on the network.
 @MainActor
 @Observable
@@ -23,7 +22,7 @@ final class StatusModel {
     private let journal = TransitionLog()
     private let settings: AppSettings
     private let notifier: Notifier
-    private let monitor = NWPathMonitor()
+    private let routeEvents = RouteEventSource()
     private var safetyPoll: Timer?
     private var settleTimer: Timer?
 
@@ -32,9 +31,9 @@ final class StatusModel {
     var onUpdate: (() -> Void)?
 
     private static let historyLimit = 50
-    // A path event does not always follow an address change — a secondary
-    // interface gaining an address can be silent — so the poll is the floor on
-    // how stale the verdict can get. getifaddrs costs microseconds.
+    // A genuine backstop again, now that the routing socket catches address
+    // changes as they happen. It exists for anything the socket might miss —
+    // a dropped message, a wake from sleep — not as the primary detector.
     private static let safetyPollInterval: TimeInterval = 60
 
     // Notifier is main-actor isolated, so it cannot be a default argument —
@@ -49,17 +48,14 @@ final class StatusModel {
         await notifier.requestAuthorization()
     }
 
-    /// Idempotent: the menu bar label's `.task` can run more than once, and
-    /// restarting an already-started NWPathMonitor is not harmless.
+    /// Idempotent: start may be called more than once, and reopening the
+    /// routing socket would leak the previous one.
     func start() {
         guard !started else { return }
         started = true
         journal.pruneOnLaunch()
 
-        monitor.pathUpdateHandler = { [weak self] _ in
-            Task { @MainActor in self?.evaluate() }
-        }
-        monitor.start(queue: .global(qos: .utility))
+        routeEvents.start { [weak self] in self?.evaluate() }
 
         safetyPoll = Timer.scheduledTimer(withTimeInterval: Self.safetyPollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.evaluate() }

@@ -72,11 +72,25 @@ than a service.
 
 ## Timing
 
-`NWPathMonitor` for change events, plus a 60-second safety poll. Path events are not reliable for
-this: measured, adding a public IPv4 to a secondary interface produced no path event at all, and the
-change was only picked up by the poll. SLAAC and DHCP renewals are similarly quiet. The poll is
-therefore the real floor on staleness, not a backstop — `getifaddrs` costs microseconds, so a short
-interval is nearly free. The panel also has a manual Refresh for when the user does not believe it.
+A `PF_ROUTE` socket for change events, plus a 60-second safety poll and a manual Refresh.
+
+`NWPathMonitor` was the original choice and is the wrong one. Measured on macOS 26.4 with all three
+mechanisms watching simultaneously while an interface gained a public IPv4:
+
+| Mechanism | Fired |
+|---|---|
+| `NWPathMonitor` | no |
+| `SCDynamicStore` (`State:/Network/Interface/…`) | no |
+| `PF_ROUTE` | `RTM_NEWADDR`, `RTM_DELADDR`, `RTM_IFINFO` |
+
+The first two sit above the routing layer and report *reachability paths* and *network services*. An
+interface with no default route that SystemConfiguration does not treat as a service is invisible to
+both — which is exactly the case worth catching, a forgotten interface quietly gaining an address.
+
+The routing socket needs two pieces of care. It carries `RTM_MISS` for every failed route lookup —
+95 in one capture — so messages are filtered to address and interface changes. And one `ifconfig`
+invocation emits a burst, six messages inside a millisecond, so events are coalesced over 300ms
+rather than driving one evaluation each.
 
 Observed Severity updates instantly and drives the glyph. Settled Severity requires 30 seconds of
 stability and drives notifications. Entry into `alert` bypasses the debounce entirely. Debounce
