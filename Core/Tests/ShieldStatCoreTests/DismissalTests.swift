@@ -98,10 +98,28 @@ struct DismissalTests {
         #expect(verdict.state == .directlyExposed)
     }
 
-    @Test("A socket with no process name keys on its port, not on nil")
-    func keyFallback() {
-        #expect(spotify.key == .process("Spotify"))
+    @Test("A plain dismissal keys on the port, even when the process is known")
+    func plainDismissalIsNarrow() {
+        // Keying on the process would make one click cover every port that
+        // process opens later — convenient for Spotify, a standing blind spot
+        // for Docker, whose job is publishing arbitrary ports.
+        #expect(spotify.key == .port(57621))
         #expect(unnamedDaemon.key == .port(111))
+        #expect(spotify.processKey == .process("Spotify"))
+        #expect(unnamedDaemon.processKey == nil)
+    }
+
+    @Test("Dismissing one Docker port does not dismiss the next one it publishes")
+    func dockerPortsAreIndependent() {
+        let published = ListeningSocket(port: 5432, scope: .allInterfaces, process: "com.docker.backend")
+        let newContainer = ListeningSocket(port: 8443, scope: .allInterfaces, process: "com.docker.backend")
+
+        let verdict = Policy.evaluate(
+            [fact("en0", .private)],
+            listening: [published, newContainer],
+            dismissed: [published.key]
+        )
+        #expect(verdict.raisingListeners == [newContainer])
     }
 
     @Test("Listeners are labelled for a human where possible")

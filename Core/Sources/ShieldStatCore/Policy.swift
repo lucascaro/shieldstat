@@ -84,7 +84,7 @@ public enum Policy {
 
         // Not reachable: listeners are worth flagging but dismissible, because
         // the machine is full of them and most are expected.
-        let undismissed = reachable.filter { !dismissed.contains($0.key) }
+        let undismissed = reachable.filter { !$0.isDismissed(by: dismissed) }
         guard !undismissed.isEmpty else {
             return Verdict(state: worst, severity: addressSeverity, raisingFacts: raising)
         }

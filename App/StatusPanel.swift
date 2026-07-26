@@ -6,6 +6,11 @@ struct StatusPanel: View {
     let model: StatusModel
     let settings: AppSettings
 
+    /// Collapsed by default: these are the listeners the check judged harmless,
+    /// so they are reassurance rather than information, and the panel should
+    /// lead with what needs a decision.
+    @State private var showingQuiet = false
+
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -16,6 +21,10 @@ struct StatusPanel: View {
             if !model.verdict.raisingListeners.isEmpty {
                 Divider()
                 portList
+            }
+            if !model.localOnlyListeners.isEmpty || !model.dismissedListeners.isEmpty {
+                Divider()
+                quietList
             }
             if model.observedSeverity != .ok {
                 Divider()
@@ -92,7 +101,7 @@ struct StatusPanel: View {
     private var portList: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(model.verdict.state == .exposedService ? "Reachable now" : "Listening on all interfaces")
+                Text(model.verdict.state == .exposedService ? "Reachable now" : "Reachable from other machines")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -123,14 +132,17 @@ struct StatusPanel: View {
                             Text(note).font(.caption2).foregroundStyle(.secondary)
                         }
                     }
-                    if let scope = listener.dismissScopeNote {
-                        Text(scope)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
-                            .background(.quaternary, in: Capsule())
-                    }
                     Spacer()
+                    // Broad dismissal is a separate, explicit action. One click
+                    // covering every port a process opens later is convenient
+                    // for Spotify and a standing blind spot for Docker, whose
+                    // job is publishing arbitrary ports.
+                    if model.verdict.state != .exposedService, let name = listener.process {
+                        Button("all \(name)") { model.dismissProcess(listener) }
+                            .buttonStyle(.link)
+                            .font(.caption2)
+                            .help("Dismiss every port \(name) opens, now and in future")
+                    }
                     if model.verdict.state == .exposedService {
                         Text("reachable").font(.caption2).foregroundStyle(.red)
                     }
@@ -143,6 +155,71 @@ struct StatusPanel: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Listeners that cannot be reached, or that the user has accepted. Listed
+    /// without any control, because there is nothing to decide about them — the
+    /// point is to show that the check saw them and judged them harmless, rather
+    /// than to leave the user wondering whether it looked.
+    private var quietList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { showingQuiet.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: showingQuiet ? "chevron.down" : "chevron.right")
+                        .font(.caption2)
+                    Text(quietSummary).font(.caption)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("\(showingQuiet ? "Hide" : "Show") \(quietSummary)")
+
+            if showingQuiet {
+                if !model.localOnlyListeners.isEmpty {
+                    Text("Local only — unreachable from other machines")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    ForEach(model.localOnlyListeners, id: \.self) { listener in
+                        HStack(spacing: 6) {
+                            Text(listener.label).font(.system(.caption2, design: .monospaced))
+                            Spacer()
+                            if let note = listener.portDescription {
+                                Text(note).font(.caption2)
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
+                if !model.dismissedListeners.isEmpty {
+                    Text("Dismissed")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, model.localOnlyListeners.isEmpty ? 0 : 4)
+                    ForEach(model.dismissedListeners, id: \.self) { listener in
+                        Text(listener.label)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+    }
+
+    private var quietSummary: String {
+        var parts: [String] = []
+        if !model.localOnlyListeners.isEmpty {
+            parts.append("\(model.localOnlyListeners.count) local only")
+        }
+        if !model.dismissedListeners.isEmpty {
+            parts.append("\(model.dismissedListeners.count) dismissed")
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// Direct exposure can be snoozed but never permanently silenced — the

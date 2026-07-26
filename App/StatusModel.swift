@@ -18,6 +18,21 @@ final class StatusModel {
 
     var observedSeverity: Severity { verdict.severity }
 
+    /// Bound to loopback only, so unreachable from any other machine. Shown for
+    /// completeness and never warned about — the distinction between these and
+    /// the reachable ones is the entire point of the check.
+    var localOnlyListeners: [ListeningSocket] {
+        listeners.filter { !$0.isReachable }.sorted { $0.port < $1.port }
+    }
+
+    /// Reachable listeners the user has already accepted. Not warned about, but
+    /// still worth being able to see without opening settings.
+    var dismissedListeners: [ListeningSocket] {
+        listeners
+            .filter { $0.isReachable && $0.isDismissed(by: settings.effectiveDismissals) }
+            .sorted { $0.port < $1.port }
+    }
+
     private var tracker: SeverityTracker
     private var started = false
     private let journal = TransitionLog()
@@ -82,10 +97,18 @@ final class StatusModel {
         try? settings.muteBook.mute(addressClass, since: now, until: nil)
     }
 
-    /// Marks a listener as expected on this machine. Re-evaluates immediately so
-    /// the glyph reflects the decision without waiting for the next event.
+    /// Marks one port as expected. Narrow on purpose — see ListeningSocket.key.
     func dismiss(_ listener: ListeningSocket) {
         settings.dismissedListeners.insert(listener.key)
+        evaluate()
+    }
+
+    /// Marks every port a process holds, now and in future, as expected. Only
+    /// ever reached by an explicit second action, because for something like
+    /// Docker this is a standing blind spot rather than a convenience.
+    func dismissProcess(_ listener: ListeningSocket) {
+        guard let key = listener.processKey else { return }
+        settings.dismissedListeners.insert(key)
         evaluate()
     }
 
@@ -93,6 +116,8 @@ final class StatusModel {
     /// warning becomes about listeners that appear later rather than about the
     /// twenty a Mac starts with.
     func dismissAllListeners() {
+        // Port keys, never process keys: accepting a baseline should accept
+        // what is listening now, not authorise whatever appears later.
         for listener in verdict.raisingListeners {
             settings.dismissedListeners.insert(listener.key)
         }

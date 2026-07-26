@@ -39,8 +39,26 @@ public struct ListeningSocket: Sendable, Equatable, Hashable, Codable {
         self.process = process
     }
 
-    public var key: ListenerKey {
-        if let process { .process(process) } else { .port(port) }
+    /// What a plain dismissal keys on: this port and nothing else.
+    ///
+    /// Deliberately *not* the process. Keying on the process would make one
+    /// click cover every port that process opens later, which is convenient for
+    /// Spotify's rotating peer-discovery port and dangerous for Docker, whose
+    /// whole job is publishing arbitrary ports. Broad dismissal exists, but it
+    /// has to be chosen explicitly.
+    public var key: ListenerKey { .port(port) }
+
+    /// The broader key, offered as a separate and deliberate action.
+    public var processKey: ListenerKey? {
+        process.map(ListenerKey.process)
+    }
+
+    /// A socket is dismissed if its port was dismissed, or if its process was
+    /// dismissed wholesale.
+    public func isDismissed(by dismissals: Set<ListenerKey>) -> Bool {
+        if dismissals.contains(.port(port)) { return true }
+        if let processKey, dismissals.contains(processKey) { return true }
+        return false
     }
 
     /// Loopback sockets are unreachable from anywhere else, so they never count.
@@ -73,17 +91,23 @@ public enum ListeningSensor {
 
         for line in text.split(separator: "\n") {
             let columns = line.split(separator: " ", omittingEmptySubsequences: true)
-            guard columns.count >= 4,
-                  columns.last == "LISTEN",
+            guard columns.count >= 6,
                   columns[0].hasPrefix("tcp"),
+                  columns[5] == "LISTEN",
                   let socket = parseLocalAddress(String(columns[3]))
             else { continue }
+
+            // `netstat -anv` carries "process:pid" in column 11 for *every*
+            // socket, including root-owned ones an unprivileged lsof cannot see.
+            // It truncates at 16 characters and breaks on spaces, so lsof's name
+            // wins when there is one.
+            let fromNetstat = columns.count >= 11 ? processName(column: String(columns[10])) : nil
 
             // A dual-stack service appears once per family; it is one service.
             found.insert(ListeningSocket(
                 port: socket.port,
                 scope: socket.scope,
-                process: names[socket.port]
+                process: names[socket.port] ?? fromNetstat
             ))
         }
 
@@ -105,9 +129,39 @@ public enum ListeningSensor {
 
             // The caller passes +c 0 so commands arrive untruncated. First
             // writer wins, so the mapping is stable across dual-stack rows.
-            names[port] = names[port] ?? String(columns[0])
+            names[port] = names[port] ?? unescape(String(columns[0]))
         }
         return names
+    }
+
+    /// "rpcbind:578" -> "rpcbind". A pid is not useful to show and changes on
+    /// every restart, so it would make a poor dismissal key.
+    static func processName(column: String) -> String? {
+        guard let separator = column.lastIndex(of: ":") else { return nil }
+        let name = String(column[..<separator])
+        return name.isEmpty ? nil : name
+    }
+
+    /// lsof renders non-printable and space characters as \xNN, so
+    /// "Discord Helper (Renderer)" arrives as "Discord\x20Helper\x20(Renderer)".
+    /// Left escaped it is unreadable, and it is also the key a dismissal is
+    /// stored under.
+    static func unescape(_ name: String) -> String {
+        guard name.contains("\\x") else { return name }
+        var result = ""
+        var rest = Substring(name)
+        while let marker = rest.range(of: "\\x") {
+            result += rest[..<marker.lowerBound]
+            let hex = rest[marker.upperBound...].prefix(2)
+            if hex.count == 2, let value = UInt8(hex, radix: 16), let scalar = Unicode.Scalar(UInt32(value)) {
+                result.append(Character(scalar))
+                rest = rest[rest.index(marker.upperBound, offsetBy: 2)...]
+            } else {
+                result += rest[marker.lowerBound..<marker.upperBound]
+                rest = rest[marker.upperBound...]
+            }
+        }
+        return result + rest
     }
 
     /// `*.3000`, `127.0.0.1.8000`, `::1.8021`, `192.168.50.119.7000` — the port
