@@ -42,6 +42,14 @@ extension PostureState {
 }
 
 extension Severity {
+    var name: String {
+        switch self {
+        case .ok: "ok"
+        case .notice: "notice"
+        case .alert: "alert"
+        }
+    }
+
     /// Shape carries the meaning, not colour alone — the glyph has to survive
     /// colourblindness and monochrome menu bar rendering.
     var symbolName: String {

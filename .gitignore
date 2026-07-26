@@ -5,3 +5,6 @@ DerivedData/
 xcuserdata/
 *.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
 .build/
+.agents/
+.claude/
+skills-lock.json

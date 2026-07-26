@@ -137,3 +137,18 @@ real `ifconfig` output, CGNAT, multi-GUA SLAAC, and secondary-interface exposure
   refuses unsigned apps and the override is buried. Packaging, not architecture.
 - **Persisted Transition history.**
 - **Any settings beyond the five listed above.**
+
+## Dogfooding instrumentation
+
+Transitions are written to unified logging (`subsystem: dev.lucascaro.ShieldStat`, category
+`transitions`) as well as the in-memory ring buffer. The buffer dies on quit, and with launch at
+login enabled that means every reboot — so a week-long trial would otherwise only ever show
+"since the last restart". Unified logging already persists, rotates, and ages out on its own, which
+gets a real trial's worth of data without this project owning a file of the user's network history.
+
+Review a trial with:
+
+    log show --predicate 'subsystem == "dev.lucascaro.ShieldStat"' --last 7d --style compact
+
+Fields are marked `.public` deliberately: interface names and severity names, no addresses. If the
+persisted Transition log in Deferred is ever built, this is the thing it replaces.

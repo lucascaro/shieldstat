@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import Observation
+import OSLog
 import ShieldStatCore
 
 /// Drives evaluation: network path events, a safety poll, and a wake timed to
@@ -93,7 +94,20 @@ final class StatusModel {
     private func record(_ transition: Transition) {
         history.insert(transition, at: 0)
         if history.count > Self.historyLimit { history.removeLast() }
+
+        // The in-memory ring buffer dies on quit, and with launch-at-login that
+        // means every reboot. Unified logging already persists, rotates, and
+        // ages out on its own, so a week of real transitions survives without
+        // us owning a file of the user's network history.
+        Self.log.notice("""
+            transition \(transition.from.name, privacy: .public) -> \
+            \(transition.to.name, privacy: .public) \
+            state=\(transition.verdict.state.rawValue, privacy: .public) \
+            raisedBy=\(transition.verdict.raisingFacts.map(\.interface).sorted().joined(separator: ","), privacy: .public)
+            """)
     }
+
+    private static let log = Logger(subsystem: "dev.lucascaro.ShieldStat", category: "transitions")
 
     /// A pending candidate settles on a clock, not on network activity, so it
     /// needs its own wake-up.
