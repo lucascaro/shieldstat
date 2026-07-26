@@ -89,7 +89,12 @@ silenced.
 
 ## Privacy
 
-No network calls. No telemetry. No accounts.
+No telemetry. No accounts. No background network calls.
+
+The one thing that leaves your machine is the **?** button next to a listener,
+which opens a web search for what that process is and whether it should be
+reachable. It only fires on a click, and it sends the process name and port to
+the search engine. Nothing else in the app talks to the network.
 
 Transitions are appended to `~/Library/Application Support/ShieldStat/transitions.jsonl`, pruned to
 14 days. Records hold the timestamp, the severities, the state, interface names, and address

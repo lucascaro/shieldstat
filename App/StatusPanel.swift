@@ -126,6 +126,7 @@ struct StatusPanel: View {
                         .help(listener.dismissDescription)
                         .accessibilityLabel(listener.dismissDescription)
                     }
+                    lookupButton(listener)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(listener.label).font(.system(.caption, design: .monospaced))
                         if let note = listener.portDescription {
@@ -157,6 +158,27 @@ struct StatusPanel: View {
         }
     }
 
+    /// Opens a web search for what this listener is and whether it should be
+    /// reachable. Deliberately a search rather than a built-in verdict: for most
+    /// ports the honest answer depends on what the user installed, and a tool
+    /// that guessed would be trusted more than it deserves.
+    ///
+    /// Note this is the one control in the app that leaves the machine — it
+    /// sends a process name to Google, so it only ever fires on a click.
+    private func lookupButton(_ listener: ListeningSocket) -> some View {
+        Button {
+            if let url = ListenerLookup.searchURL(for: listener) {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            Image(systemName: "questionmark.circle")
+        }
+        .buttonStyle(.borderless)
+        .font(.caption)
+        .help("Search the web for what \(listener.process ?? "port \(listener.port)") is, and whether it should be listening")
+        .accessibilityLabel("Look up \(listener.label)")
+    }
+
     /// Listeners that cannot be reached, or that the user has accepted. Listed
     /// without any control, because there is nothing to decide about them — the
     /// point is to show that the check saw them and judged them harmless, rather
@@ -185,6 +207,7 @@ struct StatusPanel: View {
                         .foregroundStyle(.secondary)
                     ForEach(model.localOnlyListeners, id: \.self) { listener in
                         HStack(spacing: 6) {
+                            lookupButton(listener)
                             Text(listener.label).font(.system(.caption2, design: .monospaced))
                             Spacer()
                             if let note = listener.portDescription {
