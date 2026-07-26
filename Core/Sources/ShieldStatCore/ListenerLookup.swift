@@ -12,7 +12,12 @@ public enum ListenerLookup {
     /// far more searchable than "port 111".
     public static func query(for listener: ListeningSocket) -> String {
         var terms: [String] = []
-        if let process = listener.process { terms.append("\"\(process)\"") }
+        // Unquoted. Quoting looked like precision and is the opposite: a quoted
+        // term is a hard exact-match requirement, and intersecting that with a
+        // long natural-language query returns nothing for anything obscure —
+        // which is exactly what a user needs to look up. Measured on symptomsd:
+        // quoted returned no results, bare returned useful ones.
+        if let process = listener.process { terms.append(process) }
         terms.append("port \(listener.port)")
         if let description = WellKnownPorts.description(of: listener.port),
            listener.process == nil {

@@ -8,7 +8,10 @@ struct ListenerLookupTests {
     func leadsWithProcess() {
         let socket = ListeningSocket(port: 111, scope: .allInterfaces, process: "rpcbind")
         let query = ListenerLookup.query(for: socket)
-        #expect(query.hasPrefix("\"rpcbind\""))
+        #expect(query.hasPrefix("rpcbind"))
+        // Never quoted: an exact-match requirement returns nothing for obscure
+        // daemons, which are precisely the ones worth looking up.
+        #expect(query.contains("\"") == false)
         #expect(query.contains("port 111"))
         #expect(query.contains("0.0.0.0"))
     }
