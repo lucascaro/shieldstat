@@ -34,6 +34,18 @@ The interface carrying outbound traffic to unmatched destinations. Display conte
 describes egress and says nothing about who can reach you.
 _Avoid_: Primary interface, main connection, active interface
 
+**Listening Socket**:
+A TCP socket in LISTEN state, identified by its port and its Bind Scope. Never by the process
+holding it — naming that requires privilege this project declines to take.
+_Avoid_: Open port, service, daemon
+
+**Bind Scope**:
+Where a Listening Socket is bound: `loopback`, `allInterfaces`, or `specificAddress`. Decides
+whether anything outside this machine could reach it at all.
+_Avoid_: Interface, binding, address
+
+### Judgment
+
 **Policy**:
 The single function mapping a set of Facts to a State and a Severity. All judgment in the system
 lives here and nowhere else.
