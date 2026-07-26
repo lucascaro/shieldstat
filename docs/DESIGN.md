@@ -38,12 +38,18 @@ on wifi is Private, because `max(ok, ok)` is `ok` and the private Link names it.
 
 With no up interfaces there are no Links: Offline, `ok`.
 
-**Correlation.** If the address severity is at least `notice` *and* something is listening on a
-non-loopback socket, the state becomes **Exposed Service** at `alert`. Neither fact alone justifies
-it: a typical Mac has ~25 wildcard listeners at all times, so listening is `ok` by itself, and being
-reachable with nothing listening is milder than being reachable with an open door. This is the
-correlation the sensor/policy split exists for — check #1 and check #2 each know only their own
-facts, and only Policy sees both.
+**Listening, unreachable.** A non-loopback listener is **Open Ports** at `notice`, and each one is
+individually dismissible. An earlier version made this `ok` on the grounds that a Mac has ~21 of them
+and a permanent yellow would be ignored. Dogfooding overruled it: anything listening on `0.0.0.0` is
+a problem waiting for a network change, and silence was the wrong answer. Dismissal is what keeps it
+usable — the warning becomes about listeners that appear *later*, not about macOS.
+
+**Correlation.** If the address severity is at least `notice` *and* anything non-loopback is
+listening, the state becomes **Exposed Service** at `alert`, and **dismissals do not apply**. A
+dismissal means "this service is expected on my machine", not "this service is safe to expose" —
+Spotify listening behind NAT is unremarkable, Spotify listening on hotel wifi is the situation this
+tool exists for. This is the correlation the sensor/policy split exists for: check #1 and check #2
+each know only their own facts, and only Policy sees both.
 
 Ties between equal-Severity Links are broken by table order, so Private wins over Carrier NAT
 which wins over No Network. This only affects the words shown, never the glyph.
@@ -59,13 +65,19 @@ TCP sockets in LISTEN state, classified by bind scope: `loopback` (`127.0.0.1`, 
 `allInterfaces` (`*`, `0.0.0.0`, `::`), or `specificAddress`. A port listening on tcp4 and tcp6 is
 one service, not two.
 
-Read by parsing `netstat -an -p tcp`, unprivileged. `lsof` would name the process but sees only the
-current user's sockets without root — measured, 27 of 45 on a real machine — and closing that gap
-needs a permanently installed root helper. A passive monitor should not require more privilege than
-the thing it monitors, so the check reports ports and not process names.
+Read by parsing `netstat -an -p tcp` for the sockets and `lsof -iTCP -sTCP:LISTEN -P -n` for process
+names, both unprivileged. `netstat` sees every socket and names none; `lsof` without root names only
+the current user's — measured, 20 of 34 sockets on a real machine. Those are the user-facing apps
+worth dismissing, and the unnamed remainder are system daemons. Naming those too would need a
+permanently installed root helper, and a passive monitor should not require more privilege than the
+thing it monitors.
 
-Sockets are enumerated only when the address check already reports at least `notice`. Behind NAT
-they cannot change the verdict, so the common case spawns no subprocess at all.
+Names matter because they are what a dismissal is keyed to. Spotify holds 57621 permanently and an
+ephemeral port besides; a port-keyed dismissal would decay every time the ephemeral one rotated.
+Dismissals key on the process name where known and fall back to the port otherwise.
+
+Both commands run on every evaluation, since a listener is now a `notice` even behind NAT and so the
+verdict depends on them in every case.
 
 TCP only. UDP has no listen state, so a bound UDP socket may be a client's ephemeral port rather
 than a service.

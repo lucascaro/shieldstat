@@ -29,6 +29,11 @@ final class AppSettings {
 
     var muteBook: MuteBook { didSet { persistMutes() } }
 
+    /// Listeners the user has said are expected on this machine. Suppresses the
+    /// standalone notice only — see Policy, a dismissal never survives the
+    /// machine becoming reachable.
+    var dismissedListeners: Set<ListenerKey> { didSet { persistDismissals() } }
+
     private let defaults: UserDefaults
 
     private enum Key {
@@ -36,6 +41,7 @@ final class AppSettings {
         static let debounce = "debounceSeconds"
         static let bypassAlert = "bypassAlert"
         static let mutes = "muteBook"
+        static let dismissals = "dismissedListeners"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -45,10 +51,16 @@ final class AppSettings {
         bypassAlert = defaults.object(forKey: Key.bypassAlert) as? Bool ?? true
         muteBook = (defaults.data(forKey: Key.mutes)
             .flatMap { try? JSONDecoder().decode(MuteBook.self, from: $0) }) ?? MuteBook()
+        dismissedListeners = (defaults.data(forKey: Key.dismissals)
+            .flatMap { try? JSONDecoder().decode(Set<ListenerKey>.self, from: $0) }) ?? []
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
     var bypassing: Set<Severity> { bypassAlert ? [.alert] : [] }
+
+    private func persistDismissals() {
+        defaults.set(try? JSONEncoder().encode(dismissedListeners), forKey: Key.dismissals)
+    }
 
     private func persistMutes() {
         defaults.set(try? JSONEncoder().encode(muteBook), forKey: Key.mutes)

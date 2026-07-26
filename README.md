@@ -18,16 +18,20 @@ between sitting behind NAT and sitting on the open internet.
 | `169.254/16` only | No Network | ok |
 | A global IPv6 address | Publicly Addressable | notice |
 | A global IPv4 address | Directly Exposed | alert |
-| Either of the above, **and** something listening | Exposed Service | alert |
+| Something listening on all interfaces | Open Ports | notice |
+| Either exposure state, **and** something listening | Exposed Service | alert |
 
-**Listening services** — TCP sockets in LISTEN state, by bind scope. On its own this is never a
-warning: a typical Mac has around 25 sockets bound to all interfaces at any moment, so a widget that
-flagged them would be permanently red and instantly ignored. It only means something once the
-machine is also reachable, which is the one thing `ifconfig` and `netstat` cannot tell you
-separately.
+**Listening services** — TCP sockets in LISTEN state, by bind scope. Anything bound to all
+interfaces is a problem waiting for a network change, so it is flagged — but a Mac has around 20 of
+them, so each is individually dismissible, and there is a bulk action to accept the current set as a
+baseline. The warning is then about listeners that appear *later*.
 
-Ports only, no process names. Naming the process needs a root helper, and a passive monitor should
-not require more privilege than the thing it monitors.
+Dismissals are ignored the moment the machine becomes reachable. A dismissal means "this service is
+expected on my machine", not "this service is safe to expose".
+
+Process names come from an unprivileged `lsof`, which sees the current user's sockets — enough to
+name Spotify, Docker and the like. System daemons show as bare port numbers; naming those would need
+a root helper, and a passive monitor should not require more privilege than the thing it monitors.
 
 Every interface that is up and running is evaluated the same way. A public address on a forgotten
 secondary interface counts exactly as much as one on your primary connection — the default route

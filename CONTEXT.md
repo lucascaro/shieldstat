@@ -39,6 +39,13 @@ A TCP socket in LISTEN state, identified by its port and its Bind Scope. Never b
 holding it — naming that requires privilege this project declines to take.
 _Avoid_: Open port, service, daemon
 
+**Dismissal**:
+A declaration that a Listening Socket is expected on this machine. Suppresses the `notice` it would
+otherwise raise, and is ignored entirely once the machine becomes reachable — it means "expected",
+never "safe to expose". Keyed to the process name where known, otherwise to the port. Distinct from
+a [[Mute]], which suppresses notifications and never changes what the glyph shows.
+_Avoid_: Ignore, allowlist, exception, mute
+
 **Bind Scope**:
 Where a Listening Socket is bound: `loopback`, `allInterfaces`, or `specificAddress`. Decides
 whether anything outside this machine could reach it at all.
@@ -52,8 +59,8 @@ lives here and nowhere else.
 _Avoid_: Rules engine, evaluator, analyzer
 
 **State**:
-The user-facing name for a situation: Private, Carrier NAT, Publicly Addressable, Directly
-Exposed, Exposed Service, No Network, Offline. Produced by Policy, never by a Sensor.
+The user-facing name for a situation: Private, Carrier NAT, Open Ports, Publicly Addressable,
+Directly Exposed, Exposed Service, No Network, Offline. Produced by Policy, never by a Sensor.
 _Avoid_: Status, condition, mode
 
 **Severity**:

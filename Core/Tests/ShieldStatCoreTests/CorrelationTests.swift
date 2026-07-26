@@ -10,17 +10,21 @@ private let loopbackOnly = [ListeningSocket(port: 8000, scope: .loopback)]
 
 @Suite("Exposure and listening services, correlated")
 struct CorrelationTests {
-    @Test("Services listening behind NAT are calm — this is the common case")
-    func listeningWhilePrivateIsCalm() {
+    @Test("A wildcard listener behind NAT is a notice — dismissible, not silent")
+    func listeningWhilePrivateIsNoticed() {
         let verdict = Policy.evaluate([fact("en0", .private)], listening: wildcard)
-        #expect(verdict.severity == .ok)
-        #expect(verdict.state == .private)
+        #expect(verdict.severity == .notice)
+        #expect(verdict.state == .listeningService)
     }
 
-    @Test("A machine with dozens of wildcard listeners behind NAT stays calm")
-    func manyListenersStillCalm() {
+    @Test("Dismissing every listener behind NAT returns the machine to calm")
+    func dismissingAllListenersIsCalm() {
         let many = (3000..<3030).map { ListeningSocket(port: UInt16($0), scope: .allInterfaces) }
-        #expect(Policy.evaluate([fact("en0", .private)], listening: many).severity == .ok)
+        let dismissed = Set(many.map(\.key))
+        #expect(Policy.evaluate([fact("en0", .private)], listening: many, dismissed: dismissed).severity == .ok)
+        // Undismissed, the same set is a notice — never worse, since nothing
+        // outside can reach them.
+        #expect(Policy.evaluate([fact("en0", .private)], listening: many).severity == .notice)
     }
 
     @Test("Publicly addressable plus a wildcard listener is worse than either alone")
@@ -61,9 +65,9 @@ struct CorrelationTests {
         #expect(verdict.reachablePorts == [5433])
     }
 
-    @Test("Reachable ports are not reported when nothing is exposed")
-    func noPortsWhenPrivate() {
-        #expect(Policy.evaluate([fact("en0", .private)], listening: wildcard).reachablePorts.isEmpty)
+    @Test("Ports are reported behind NAT too, so a dismissal can be made deliberately")
+    func portsListedWhenPrivate() {
+        #expect(Policy.evaluate([fact("en0", .private)], listening: wildcard).reachablePorts == [5433])
     }
 
     @Test("Omitting the listening argument preserves the address-only verdict")

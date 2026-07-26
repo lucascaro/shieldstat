@@ -15,6 +15,9 @@ public enum PostureState: String, Sendable, CaseIterable, Codable {
     case `private`
     case publiclyAddressable
     case directlyExposed
+    /// Something is listening on a non-loopback socket, but the machine is not
+    /// reachable from outside. A door that is open onto a courtyard.
+    case listeningService
     /// Reachable from outside *and* something is listening. Neither fact alone
     /// justifies this; the correlation is the whole point of the policy layer.
     case exposedService
@@ -26,29 +29,31 @@ public struct Verdict: Sendable, Equatable {
     /// The facts that produced this severity. A worsening transition notifies
     /// unless *every* one of these is muted — see ADR-0002.
     public let raisingFacts: [Fact]
-    /// Listening ports that something outside this Mac could plausibly reach.
-    /// Empty unless the machine is also exposed — a listener behind NAT is not
-    /// reachable, so reporting it would be noise.
-    public let reachablePorts: [UInt16]
+    /// The listening sockets responsible for this verdict. Dismissed ones are
+    /// excluded while the machine is unreachable, and included once it is not.
+    public let raisingListeners: [ListeningSocket]
 
     public init(
         state: PostureState,
         severity: Severity,
         raisingFacts: [Fact],
-        reachablePorts: [UInt16] = []
+        raisingListeners: [ListeningSocket] = []
     ) {
         self.state = state
         self.severity = severity
         self.raisingFacts = raisingFacts
-        self.reachablePorts = reachablePorts
+        self.raisingListeners = raisingListeners
     }
+
+    public var reachablePorts: [UInt16] { raisingListeners.map(\.port).sorted() }
 }
 
 /// The single place judgment lives. Everything else in this module observes.
 public enum Policy {
     public static func evaluate(
         _ facts: [Fact],
-        listening: [ListeningSocket] = []
+        listening: [ListeningSocket] = [],
+        dismissed: Set<ListenerKey> = []
     ) -> Verdict {
         guard !facts.isEmpty else {
             return Verdict(state: .offline, severity: .ok, raisingFacts: [])
@@ -58,25 +63,37 @@ public enum Policy {
         // No match ordering, no quantifiers over the whole set.
         let worst = facts.map { state(for: $0.addressClass) }.max { rank($0) < rank($1) }!
         let raising = facts.filter { state(for: $0.addressClass) == worst }
+        let addressSeverity = severity(of: worst)
+        let reachable = listening.filter(\.isReachable)
 
-        // The correlation. A listening service is unremarkable on its own — a
-        // typical Mac has dozens — and only means something once the machine is
-        // reachable. Conversely, being reachable with nothing listening is
-        // milder than being reachable with an open door.
-        guard severity(of: worst) >= .notice else {
-            return Verdict(state: worst, severity: severity(of: worst), raisingFacts: raising)
+        // Reachable from outside: every non-loopback listener counts, dismissed
+        // or not. A dismissal says "this service is expected on my machine", not
+        // "this service is safe to expose" — and Spotify listening while you sit
+        // on a hotel network is the situation this whole tool exists for.
+        if addressSeverity >= .notice {
+            guard !reachable.isEmpty else {
+                return Verdict(state: worst, severity: addressSeverity, raisingFacts: raising)
+            }
+            return Verdict(
+                state: .exposedService,
+                severity: .alert,
+                raisingFacts: raising,
+                raisingListeners: reachable.sorted { $0.port < $1.port }
+            )
         }
 
-        let reachable = listening.filter { $0.scope != .loopback }.map(\.port).sorted()
-        guard !reachable.isEmpty else {
-            return Verdict(state: worst, severity: severity(of: worst), raisingFacts: raising)
+        // Not reachable: listeners are worth flagging but dismissible, because
+        // the machine is full of them and most are expected.
+        let undismissed = reachable.filter { !dismissed.contains($0.key) }
+        guard !undismissed.isEmpty else {
+            return Verdict(state: worst, severity: addressSeverity, raisingFacts: raising)
         }
 
         return Verdict(
-            state: .exposedService,
-            severity: .alert,
+            state: .listeningService,
+            severity: .notice,
             raisingFacts: raising,
-            reachablePorts: reachable
+            raisingListeners: undismissed.sorted { $0.port < $1.port }
         )
     }
 
@@ -98,7 +115,7 @@ public enum Policy {
     public static func severity(of state: PostureState) -> Severity {
         switch state {
         case .offline, .noNetwork, .carrierNAT, .private: .ok
-        case .publiclyAddressable: .notice
+        case .publiclyAddressable, .listeningService: .notice
         case .directlyExposed, .exposedService: .alert
         }
     }
@@ -111,7 +128,7 @@ public enum Policy {
         case .carrierNAT: 2
         case .noNetwork: 1
         case .offline: 0
-        case .publiclyAddressable, .directlyExposed, .exposedService: 0
+        case .publiclyAddressable, .directlyExposed, .exposedService, .listeningService: 0
         }
         return (severity(of: state), tieBreak)
     }

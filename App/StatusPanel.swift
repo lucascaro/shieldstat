@@ -13,7 +13,7 @@ struct StatusPanel: View {
             header
             Divider()
             factList
-            if !model.verdict.reachablePorts.isEmpty {
+            if !model.verdict.raisingListeners.isEmpty {
                 Divider()
                 portList
             }
@@ -86,17 +86,45 @@ struct StatusPanel: View {
         }
     }
 
-    /// Ports are only listed when the machine is reachable — a service behind
-    /// NAT is not something anyone can connect to, so naming it would be noise.
+    /// Each listener is dismissible individually, because most of what a Mac
+    /// listens on is expected and the warning is only useful once the expected
+    /// things are out of the way.
     private var portList: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Reachable listening ports").font(.caption).foregroundStyle(.secondary)
-            Text(model.verdict.reachablePorts.map(String.init).joined(separator: ", "))
-                .font(.system(.caption, design: .monospaced))
-                .fixedSize(horizontal: false, vertical: true)
-            Text("Ports only — naming the process would need a permanently installed root helper.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            HStack {
+                Text(model.verdict.state == .exposedService ? "Reachable now" : "Listening on all interfaces")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                // A fresh machine has ~20 of these. Accepting the current set as
+                // a baseline is the only way the warning becomes about *new*
+                // listeners rather than about macOS.
+                if model.verdict.state != .exposedService, model.verdict.raisingListeners.count > 1 {
+                    Button("Dismiss all \(model.verdict.raisingListeners.count)") { model.dismissAllListeners() }
+                        .buttonStyle(.link)
+                        .font(.caption2)
+                }
+            }
+
+            ForEach(model.verdict.raisingListeners, id: \.self) { listener in
+                HStack(spacing: 6) {
+                    Text(listener.label).font(.system(.caption, design: .monospaced))
+                    Spacer()
+                    if model.verdict.state == .exposedService {
+                        Text("reachable").font(.caption2).foregroundStyle(.red)
+                    } else {
+                        Button("Dismiss") { model.dismiss(listener) }
+                            .buttonStyle(.link)
+                            .font(.caption2)
+                    }
+                }
+            }
+
+            if model.verdict.state == .exposedService {
+                Text("Dismissals do not apply while this Mac is reachable.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

@@ -1,24 +1,29 @@
 import Foundation
 import ShieldStatCore
 
-/// Enumerates listening TCP sockets by running `netstat`.
+/// Enumerates listening TCP sockets, with process names where they can be had
+/// without privilege.
 ///
-/// Unprivileged on purpose. `lsof` would name the process but only sees the
-/// current user's sockets without root — measured: 27 of 45 on a real machine —
-/// and closing that gap needs a permanently installed root helper. A passive
-/// monitor should not require more privilege than the thing it monitors.
+/// `netstat` sees every socket but names none. `lsof` names them but, without
+/// root, only the current user's — measured, 8 of 21 wildcard listeners on a
+/// real machine. Those 8 are the user-facing apps worth dismissing (Spotify,
+/// Docker, Control Center); the remainder are system daemons, nameable only by
+/// a root helper this project declines to install. Using both gives every
+/// socket with a name attached wherever one is obtainable.
 enum ListeningSocketSource {
-    private static let netstat = "/usr/sbin/netstat"
-
     static func sockets() -> [ListeningSocket] {
-        guard let output = run() else { return [] }
-        return ListeningSensor.parse(netstat: output)
+        ListeningSensor.parse(
+            netstat: run("/usr/sbin/netstat", ["-an", "-p", "tcp"]) ?? "",
+            lsof: run("/usr/sbin/lsof", ["-iTCP", "-sTCP:LISTEN", "-P", "-n"]) ?? ""
+        )
     }
 
-    private static func run() -> String? {
+    private static func run(_ path: String, _ arguments: [String]) -> String? {
+        guard FileManager.default.isExecutableFile(atPath: path) else { return nil }
+
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: netstat)
-        process.arguments = ["-an", "-p", "tcp"]
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
 
         let pipe = Pipe()
         process.standardOutput = pipe

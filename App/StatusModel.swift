@@ -11,6 +11,7 @@ import ShieldStatCore
 final class StatusModel {
     private(set) var verdict = Verdict(state: .offline, severity: .ok, raisingFacts: [])
     private(set) var facts: [Fact] = []
+    private(set) var listeners: [ListeningSocket] = []
     /// Most recent first, capped. In memory only — nothing about the user's
     /// network history is written to disk.
     private(set) var history: [Transition] = []
@@ -81,6 +82,28 @@ final class StatusModel {
         try? settings.muteBook.mute(addressClass, since: now, until: nil)
     }
 
+    /// Marks a listener as expected on this machine. Re-evaluates immediately so
+    /// the glyph reflects the decision without waiting for the next event.
+    func dismiss(_ listener: ListeningSocket) {
+        settings.dismissedListeners.insert(listener.key)
+        evaluate()
+    }
+
+    /// Accepts everything currently listening as the expected baseline, so the
+    /// warning becomes about listeners that appear later rather than about the
+    /// twenty a Mac starts with.
+    func dismissAllListeners() {
+        for listener in verdict.raisingListeners {
+            settings.dismissedListeners.insert(listener.key)
+        }
+        evaluate()
+    }
+
+    func restore(_ key: ListenerKey) {
+        settings.dismissedListeners.remove(key)
+        evaluate()
+    }
+
     /// Forces an immediate re-evaluation, for when the user does not believe us.
     func refresh() {
         evaluate()
@@ -99,13 +122,14 @@ final class StatusModel {
             from: snapshot.addresses,
             defaultRouteInterfaces: snapshot.defaultRouteInterfaces
         )
-        // Listening sockets are only consulted when the machine is actually
-        // reachable. Behind NAT they cannot change the verdict, so the common
-        // case spawns no subprocess at all.
-        let addressOnly = Policy.evaluate(facts)
-        verdict = addressOnly.severity >= .notice
-            ? Policy.evaluate(facts, listening: ListeningSocketSource.sockets())
-            : addressOnly
+        // Listeners are always enumerated now: a wildcard listener is a notice
+        // even behind NAT, so the verdict depends on them in every case.
+        listeners = ListeningSocketSource.sockets()
+        verdict = Policy.evaluate(
+            facts,
+            listening: listeners,
+            dismissed: settings.dismissedListeners
+        )
 
         if let transition = tracker.observe(verdict, at: now) {
             record(transition)

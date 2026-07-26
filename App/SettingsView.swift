@@ -48,6 +48,23 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Dismissed listeners") {
+                if settings.dismissedListeners.isEmpty {
+                    Text("Nothing dismissed.").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(settings.dismissedListeners), id: \.self) { key in
+                        HStack {
+                            Text(label(for: key))
+                            Spacer()
+                            Button("Restore") { model.restore(key) }
+                        }
+                    }
+                }
+                Text("Dismissed listeners are still reported whenever this Mac becomes reachable from outside — a dismissal means the service is expected, not that it is safe to expose.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("General") {
                 Toggle("Launch at login", isOn: $settings.launchAtLogin)
             }
@@ -58,6 +75,13 @@ struct SettingsView: View {
         .onChange(of: settings.debounceSeconds) { model.settingsChanged() }
         .onChange(of: settings.bypassAlert) { model.settingsChanged() }
         .onChange(of: settings.labelDisplay) { model.redraw() }
+    }
+
+    private func label(for key: ListenerKey) -> String {
+        switch key {
+        case .process(let name): name
+        case .port(let port): "port \(port)"
+        }
     }
 
     private func muteSubtitle(_ mute: FactMute) -> String {
