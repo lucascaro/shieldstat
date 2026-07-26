@@ -114,10 +114,17 @@ struct StatusPanel: View {
                         }
                         .buttonStyle(.borderless)
                         .font(.caption)
-                        .help("Dismiss \(listener.label) — expected on this machine")
-                        .accessibilityLabel("Dismiss \(listener.label)")
+                        .help(listener.dismissDescription)
+                        .accessibilityLabel(listener.dismissDescription)
                     }
                     Text(listener.label).font(.system(.caption, design: .monospaced))
+                    if let scope = listener.dismissScopeNote {
+                        Text(scope)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                            .background(.quaternary, in: Capsule())
+                    }
                     Spacer()
                     if model.verdict.state == .exposedService {
                         Text("reachable").font(.caption2).foregroundStyle(.red)

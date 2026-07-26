@@ -91,6 +91,23 @@ extension Severity {
     }
 }
 
+extension ListeningSocket {
+    /// What clicking dismiss will actually do. A process-keyed dismissal covers
+    /// every port that process holds now or later, which is the whole reason for
+    /// keying on the name — but two rows vanishing after one click looks like a
+    /// bug unless the control says so first.
+    var dismissDescription: String {
+        switch key {
+        case .process(let name): "Dismiss all \(name) listeners"
+        case .port(let port): "Dismiss port \(port)"
+        }
+    }
+
+    var dismissScopeNote: String? {
+        if case .process(let name) = key { "all \(name) ports" } else { nil }
+    }
+}
+
 extension AddressClass {
     var title: String {
         switch self {
