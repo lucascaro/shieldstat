@@ -49,6 +49,13 @@ public struct ListeningSocket: Sendable, Equatable, Hashable, Codable {
     public var label: String {
         process.map { "\($0) · \(port)" } ?? "port \(port)"
     }
+
+    /// A short note on what the port conventionally carries. Most useful for
+    /// sockets with no process name, where the number alone says nothing and a
+    /// dismissal would otherwise be a guess.
+    public var portDescription: String? {
+        WellKnownPorts.description(of: port)
+    }
 }
 
 /// Reads listening TCP sockets. Pure: parsing only, the caller supplies the text.
@@ -96,8 +103,8 @@ public enum ListeningSensor {
                   let port = UInt16(address[address.index(after: separator)...])
             else { continue }
 
-            // lsof truncates long commands ("com.docke"); still better than a
-            // bare port number, and the first writer wins so the list is stable.
+            // The caller passes +c 0 so commands arrive untruncated. First
+            // writer wins, so the mapping is stable across dual-stack rows.
             names[port] = names[port] ?? String(columns[0])
         }
         return names

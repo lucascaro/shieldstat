@@ -49,6 +49,11 @@ struct SettingsView: View {
             }
 
             Section("Dismissed listeners") {
+                Toggle("Ignore services macOS starts itself", isOn: $settings.ignoreSystemServices)
+                Text("Covers AirPlay, Continuity and Handoff. Deliberately excludes SSH, file sharing, NFS and screen sharing — those are listening because somebody switched them on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 if settings.dismissedListeners.isEmpty {
                     Text("Nothing dismissed.").font(.caption).foregroundStyle(.secondary)
                 } else {
@@ -75,6 +80,7 @@ struct SettingsView: View {
         .onChange(of: settings.debounceSeconds) { model.settingsChanged() }
         .onChange(of: settings.bypassAlert) { model.settingsChanged() }
         .onChange(of: settings.labelDisplay) { model.redraw() }
+        .onChange(of: settings.ignoreSystemServices) { model.refresh() }
     }
 
     private func label(for key: ListenerKey) -> String {

@@ -128,7 +128,7 @@ final class StatusModel {
         verdict = Policy.evaluate(
             facts,
             listening: listeners,
-            dismissed: settings.dismissedListeners
+            dismissed: settings.effectiveDismissals
         )
 
         if let transition = tracker.observe(verdict, at: now) {

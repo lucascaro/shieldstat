@@ -34,6 +34,20 @@ final class AppSettings {
     /// machine becoming reachable.
     var dismissedListeners: Set<ListenerKey> { didSet { persistDismissals() } }
 
+    /// Auto-dismiss the listeners macOS starts on its own behalf. On by
+    /// default, and deliberately a visible toggle: it is a blind spot, and a
+    /// blind spot the user cannot see is one they cannot reconsider.
+    var ignoreSystemServices: Bool {
+        didSet { defaults.set(ignoreSystemServices, forKey: Key.ignoreSystem) }
+    }
+
+    /// What Policy is actually told, user choices plus the baseline.
+    var effectiveDismissals: Set<ListenerKey> {
+        ignoreSystemServices
+            ? dismissedListeners.union(SystemServiceBaseline.keys)
+            : dismissedListeners
+    }
+
     private let defaults: UserDefaults
 
     private enum Key {
@@ -42,6 +56,7 @@ final class AppSettings {
         static let bypassAlert = "bypassAlert"
         static let mutes = "muteBook"
         static let dismissals = "dismissedListeners"
+        static let ignoreSystem = "ignoreSystemServices"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -53,6 +68,7 @@ final class AppSettings {
             .flatMap { try? JSONDecoder().decode(MuteBook.self, from: $0) }) ?? MuteBook()
         dismissedListeners = (defaults.data(forKey: Key.dismissals)
             .flatMap { try? JSONDecoder().decode(Set<ListenerKey>.self, from: $0) }) ?? []
+        ignoreSystemServices = defaults.object(forKey: Key.ignoreSystem) as? Bool ?? true
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 

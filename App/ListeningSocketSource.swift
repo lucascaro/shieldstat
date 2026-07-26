@@ -14,7 +14,10 @@ enum ListeningSocketSource {
     static func sockets() -> [ListeningSocket] {
         ListeningSensor.parse(
             netstat: run("/usr/sbin/netstat", ["-an", "-p", "tcp"]) ?? "",
-            lsof: run("/usr/sbin/lsof", ["-iTCP", "-sTCP:LISTEN", "-P", "-n"]) ?? ""
+            // +c 0 lifts the 9-character cap on the COMMAND column, which
+            // otherwise reports "com.docke" for com.docker.backend. The name is
+            // what a dismissal keys on, so a truncated one is not cosmetic.
+            lsof: run("/usr/sbin/lsof", ["+c", "0", "-iTCP", "-sTCP:LISTEN", "-P", "-n"]) ?? ""
         )
     }
 

@@ -117,7 +117,12 @@ struct StatusPanel: View {
                         .help(listener.dismissDescription)
                         .accessibilityLabel(listener.dismissDescription)
                     }
-                    Text(listener.label).font(.system(.caption, design: .monospaced))
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(listener.label).font(.system(.caption, design: .monospaced))
+                        if let note = listener.portDescription {
+                            Text(note).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
                     if let scope = listener.dismissScopeNote {
                         Text(scope)
                             .font(.caption2)
