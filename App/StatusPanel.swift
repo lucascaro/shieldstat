@@ -1,0 +1,95 @@
+import SwiftUI
+import AppKit
+import ShieldStatCore
+
+struct StatusPanel: View {
+    let model: StatusModel
+    let settings: AppSettings
+
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            header
+            Divider()
+            factList
+            if !model.history.isEmpty {
+                Divider()
+                historyList
+            }
+            Divider()
+            footer
+        }
+        .padding(12)
+        .frame(width: 340)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: model.observedSeverity.symbolName)
+                .font(.title2)
+                .foregroundStyle(model.observedSeverity.tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.verdict.state.title).font(.headline)
+                Text(model.verdict.state.explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var factList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(model.facts, id: \.self) { fact in
+                HStack(spacing: 6) {
+                    Text(fact.interface).font(.system(.caption, design: .monospaced))
+                    if fact.carriesDefaultRoute {
+                        Text("default route")
+                            .font(.caption2)
+                            .padding(.horizontal, 4)
+                            .background(.quaternary, in: Capsule())
+                    }
+                    Spacer()
+                    Text(fact.count > 1 ? "\(fact.addressClass.title) ×\(fact.count)" : fact.addressClass.title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if model.facts.isEmpty {
+                Text("No active interfaces").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var historyList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Recent changes").font(.caption).foregroundStyle(.secondary)
+            ForEach(Array(model.history.prefix(5).enumerated()), id: \.offset) { _, transition in
+                HStack {
+                    Image(systemName: transition.isWorsening ? "arrow.up.right" : "arrow.down.right")
+                        .font(.caption2)
+                        .foregroundStyle(transition.to.tint)
+                    Text(transition.verdict.state.title).font(.caption)
+                    Spacer()
+                    Text(transition.at, style: .time).font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            Button("Settings…") {
+                openWindow(id: SettingsWindow.id)
+                // Required: openWindow alone leaves the window visible but not
+                // key from an .accessory app. Verified on macOS 26.4.
+                NSApp.activate()
+            }
+            Spacer()
+            Button("Quit") { NSApp.terminate(nil) }
+        }
+        .buttonStyle(.link)
+        .font(.caption)
+    }
+}

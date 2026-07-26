@@ -76,8 +76,12 @@ Fact, which interface carries the default route, and recent Transitions.
 Settings open via a `Window` scene, `openWindow`, and `NSApp.activate()`. Apple's blessed
 `Settings` scene with `SettingsLink`/`openSettings` does not front reliably from an `.accessory`
 app on macOS 26, and the published workarounds require toggling activation policy with timing
-delays. The chosen path is entirely public API. **Unverified — prove with a throwaway build before
-writing real code.**
+delays. The chosen path is entirely public API.
+
+Verified empirically on macOS 26.4 with a throwaway `LSUIElement` build: `openWindow(id:)` alone
+produces a window that is visible but neither key nor main; `NSApp.activate()` then makes it key
+and main. `activationPolicy` stays `.accessory` throughout — no policy toggling, no timing hacks.
+`makeKeyAndOrderFront` afterwards changes nothing. Both calls are required; neither is optional.
 
 Settings surface: label display mode, debounce duration, debounce bypass exceptions, launch at
 login, and the list of active Mutes.
