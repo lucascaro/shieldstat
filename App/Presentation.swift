@@ -67,10 +67,21 @@ extension Severity {
         }
     }
 
+    /// Colour is carried in addition to the shape difference, never instead of
+    /// it — the glyph still changes form, so severity survives for a colourblind
+    /// reader and in a monochrome menu bar.
+    var menuBarTint: NSColor {
+        switch self {
+        case .ok: .systemGreen
+        case .notice: .systemYellow
+        case .alert: .systemRed
+        }
+    }
+
     var tint: Color {
         switch self {
-        case .ok: .primary
-        case .notice: .orange
+        case .ok: .green
+        case .notice: .yellow
         case .alert: .red
         }
     }

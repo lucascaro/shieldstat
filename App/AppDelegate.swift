@@ -59,12 +59,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let severity = model.observedSeverity
-        button.image = NSImage(
+        let image = NSImage(
             systemSymbolName: severity.symbolName,
             accessibilityDescription: model.verdict.state.title
         )
-        button.image?.isTemplate = true
+
+        // Colour is carried in addition to the shape difference, never instead
+        // of it. Tinting opts out of the template rendering that would otherwise
+        // follow the menu bar's own appearance — the price of a traffic light.
+        button.image = image?.withSymbolConfiguration(.init(paletteColors: [severity.menuBarTint]))
+        button.image?.isTemplate = false
+
         button.title = showsLabel ? " \(model.verdict.state.shortLabel)" : ""
+        button.attributedTitle = NSAttributedString(
+            string: button.title,
+            attributes: [.foregroundColor: severity.menuBarTint]
+        )
 
         Self.log.notice("""
             statusItem visible=\(self.statusItem?.isVisible ?? false, privacy: .public) \
