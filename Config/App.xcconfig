@@ -10,6 +10,13 @@ GENERATE_INFOPLIST_FILE = YES
 INFOPLIST_KEY_LSUIElement = YES
 
 CODE_SIGN_STYLE = Automatic
-CODE_SIGN_ENTITLEMENTS = Config/ShieldStat.entitlements
 ENABLE_HARDENED_RUNTIME = YES
+
+// Deliberately NOT set yet:
+//   CODE_SIGN_ENTITLEMENTS = Config/ShieldStat.entitlements
+// com.apple.developer.usernotifications.time-sensitive is a restricted
+// entitlement. With ad-hoc signing the kernel SIGKILLs the app at launch —
+// verified: identical bundle exits 137 with the entitlement and runs without
+// it. Re-enable this line together with Developer ID signing and a
+// provisioning profile that carries the entitlement.
 COMBINE_HIDPI_IMAGES = YES

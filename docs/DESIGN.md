@@ -65,6 +65,23 @@ The debounce uses an injected clock so it tests without sleeping.
 notification persists as an alert or fades as a banner is the user's System Settings choice and
 cannot be forced.
 
+**Notifications do not work under ad-hoc signing, and this is not a bug to fix in code.** Measured
+on macOS 26.4 with a probe bundle:
+
+- With `com.apple.developer.usernotifications.time-sensitive` embedded and ad-hoc signing, the
+  kernel SIGKILLs the app at launch (exit 137). The same bundle without the entitlement runs.
+- Without the entitlement, `requestAuthorization` returns `false` and `authorizationStatus` stays
+  `notDetermined` — no prompt is ever shown to the user.
+
+So the entitlement is declared in `Config/ShieldStat.entitlements` but deliberately *not* wired into
+`App.xcconfig`. Notification delivery stays untestable until Developer ID signing lands, which
+promotes signing from a packaging concern to a functional prerequisite for the notification feature.
+Everything else — glyph, panel, settings, mutes, debounce — works ad-hoc today.
+
+`Notifier` re-reads authorization on every delivery rather than caching it at launch, so a user who
+answers the prompt late, or grants permission afterwards in System Settings, is heard from without
+relaunching.
+
 ## UI
 
 Single shield glyph, differentiated by *shape* rather than colour alone, so Severity survives

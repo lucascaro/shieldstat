@@ -7,4 +7,6 @@ SWIFT_VERSION = 6.0
 ALWAYS_SEARCH_USER_PATHS = NO
 CLANG_ENABLE_OBJC_WEAK = YES
 ENABLE_STRICT_OBJC_MSGSEND = YES
+// Swift 6 language mode already enforces this; stated explicitly so a future
+// XcodeGen migration cannot silently drop it.
 SWIFT_STRICT_CONCURRENCY = complete
