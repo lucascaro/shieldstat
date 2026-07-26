@@ -13,6 +13,10 @@ struct StatusPanel: View {
             header
             Divider()
             factList
+            if !model.verdict.reachablePorts.isEmpty {
+                Divider()
+                portList
+            }
             if model.observedSeverity != .ok {
                 Divider()
                 muteControls
@@ -82,6 +86,20 @@ struct StatusPanel: View {
         }
     }
 
+    /// Ports are only listed when the machine is reachable — a service behind
+    /// NAT is not something anyone can connect to, so naming it would be noise.
+    private var portList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Reachable listening ports").font(.caption).foregroundStyle(.secondary)
+            Text(model.verdict.reachablePorts.map(String.init).joined(separator: ", "))
+                .font(.system(.caption, design: .monospaced))
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Ports only — naming the process would need a permanently installed root helper.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     /// Direct exposure can be snoozed but never permanently silenced — the
     /// permanent option only appears for classes below alert severity.
     private var muteControls: some View {
@@ -111,6 +129,7 @@ struct StatusPanel: View {
 
     private var footer: some View {
         HStack {
+            Button("Refresh") { model.refresh() }
             Button("Settings…") {
                 openWindow(id: SettingsWindow.id)
                 // Required: openWindow alone leaves the window visible but not

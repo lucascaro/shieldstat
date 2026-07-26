@@ -8,8 +8,8 @@ is tell you what is already true.
 
 ## What it currently checks
 
-Whether this Mac holds a globally-routable address — the difference between sitting behind NAT and
-sitting on the open internet.
+**Address exposure** — whether this Mac holds a globally-routable address, which is the difference
+between sitting behind NAT and sitting on the open internet.
 
 | What it sees | What it says | Severity |
 |---|---|---|
@@ -18,6 +18,16 @@ sitting on the open internet.
 | `169.254/16` only | No Network | ok |
 | A global IPv6 address | Publicly Addressable | notice |
 | A global IPv4 address | Directly Exposed | alert |
+| Either of the above, **and** something listening | Exposed Service | alert |
+
+**Listening services** — TCP sockets in LISTEN state, by bind scope. On its own this is never a
+warning: a typical Mac has around 25 sockets bound to all interfaces at any moment, so a widget that
+flagged them would be permanently red and instantly ignored. It only means something once the
+machine is also reachable, which is the one thing `ifconfig` and `netstat` cannot tell you
+separately.
+
+Ports only, no process names. Naming the process needs a root helper, and a passive monitor should
+not require more privilege than the thing it monitors.
 
 Every interface that is up and running is evaluated the same way. A public address on a forgotten
 secondary interface counts exactly as much as one on your primary connection — the default route

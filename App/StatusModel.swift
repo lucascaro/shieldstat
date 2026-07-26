@@ -32,7 +32,10 @@ final class StatusModel {
     var onUpdate: (() -> Void)?
 
     private static let historyLimit = 50
-    private static let safetyPollInterval: TimeInterval = 300
+    // A path event does not always follow an address change — a secondary
+    // interface gaining an address can be silent — so the poll is the floor on
+    // how stale the verdict can get. getifaddrs costs microseconds.
+    private static let safetyPollInterval: TimeInterval = 60
 
     init(settings: AppSettings, notifier: Notifier = Notifier()) {
         self.settings = settings
@@ -80,13 +83,24 @@ final class StatusModel {
         try? settings.muteBook.mute(addressClass, since: now, until: nil)
     }
 
+    /// Forces an immediate re-evaluation, for when the user does not believe us.
+    func refresh() {
+        evaluate()
+    }
+
     func evaluate(now: Date = Date()) {
         let snapshot = SystemNetworkSource.snapshot()
         facts = ExposureSensor.facts(
             from: snapshot.addresses,
             defaultRouteInterfaces: snapshot.defaultRouteInterfaces
         )
-        verdict = Policy.evaluate(facts)
+        // Listening sockets are only consulted when the machine is actually
+        // reachable. Behind NAT they cannot change the verdict, so the common
+        // case spawns no subprocess at all.
+        let addressOnly = Policy.evaluate(facts)
+        verdict = addressOnly.severity >= .notice
+            ? Policy.evaluate(facts, listening: ListeningSocketSource.sockets())
+            : addressOnly
 
         if let transition = tracker.observe(verdict, at: now) {
             record(transition)

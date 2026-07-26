@@ -38,6 +38,13 @@ on wifi is Private, because `max(ok, ok)` is `ok` and the private Link names it.
 
 With no up interfaces there are no Links: Offline, `ok`.
 
+**Correlation.** If the address severity is at least `notice` *and* something is listening on a
+non-loopback socket, the state becomes **Exposed Service** at `alert`. Neither fact alone justifies
+it: a typical Mac has ~25 wildcard listeners at all times, so listening is `ok` by itself, and being
+reachable with nothing listening is milder than being reachable with an open door. This is the
+correlation the sensor/policy split exists for — check #1 and check #2 each know only their own
+facts, and only Policy sees both.
+
 Ties between equal-Severity Links are broken by table order, so Private wins over Carrier NAT
 which wins over No Network. This only affects the words shown, never the glyph.
 
@@ -46,10 +53,30 @@ genuinely safe. This is the classic monitoring failure mode (green when blind) a
 because the claim is narrow. A future check whose subject can be *unobservable* needs a distinct
 unknown Severity.
 
+## Check #2 — listening services
+
+TCP sockets in LISTEN state, classified by bind scope: `loopback` (`127.0.0.1`, `::1`),
+`allInterfaces` (`*`, `0.0.0.0`, `::`), or `specificAddress`. A port listening on tcp4 and tcp6 is
+one service, not two.
+
+Read by parsing `netstat -an -p tcp`, unprivileged. `lsof` would name the process but sees only the
+current user's sockets without root — measured, 27 of 45 on a real machine — and closing that gap
+needs a permanently installed root helper. A passive monitor should not require more privilege than
+the thing it monitors, so the check reports ports and not process names.
+
+Sockets are enumerated only when the address check already reports at least `notice`. Behind NAT
+they cannot change the verdict, so the common case spawns no subprocess at all.
+
+TCP only. UDP has no listen state, so a bound UDP socket may be a client's ephemeral port rather
+than a service.
+
 ## Timing
 
-`NWPathMonitor` for change events, plus a 5-minute safety poll — SLAAC and DHCP renewals do not
-reliably surface as path changes, and a confidently wrong widget is worse than a 4-minute stale one.
+`NWPathMonitor` for change events, plus a 60-second safety poll. Path events are not reliable for
+this: measured, adding a public IPv4 to a secondary interface produced no path event at all, and the
+change was only picked up by the poll. SLAAC and DHCP renewals are similarly quiet. The poll is
+therefore the real floor on staleness, not a backstop — `getifaddrs` costs microseconds, so a short
+interval is nearly free. The panel also has a manual Refresh for when the user does not believe it.
 
 Observed Severity updates instantly and drives the glyph. Settled Severity requires 30 seconds of
 stability and drives notifications. Entry into `alert` bypasses the debounce entirely. Debounce

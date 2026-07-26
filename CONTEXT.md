@@ -34,8 +34,6 @@ The interface carrying outbound traffic to unmatched destinations. Display conte
 describes egress and says nothing about who can reach you.
 _Avoid_: Primary interface, main connection, active interface
 
-### Judgment
-
 **Policy**:
 The single function mapping a set of Facts to a State and a Severity. All judgment in the system
 lives here and nowhere else.
@@ -43,7 +41,7 @@ _Avoid_: Rules engine, evaluator, analyzer
 
 **State**:
 The user-facing name for a situation: Private, Carrier NAT, Publicly Addressable, Directly
-Exposed, No Network, Offline. Produced by Policy, never by a Sensor.
+Exposed, Exposed Service, No Network, Offline. Produced by Policy, never by a Sensor.
 _Avoid_: Status, condition, mode
 
 **Severity**:
@@ -59,6 +57,11 @@ _Avoid_: Public IP, exposed, reachable, open
 The machine holds a globally-routable IPv4 address, meaning no NAT stands between it and the
 internet.
 _Avoid_: Public IP, unprotected, naked
+
+**Exposed Service**:
+The machine is Publicly Addressable or Directly Exposed *and* holds a non-loopback Listening Socket.
+Neither fact alone produces this State.
+_Avoid_: Open port, vulnerable, attack surface
 
 **Reachable**:
 Confirmed to accept an inbound connection originating from the internet. Reserved — no Sensor can

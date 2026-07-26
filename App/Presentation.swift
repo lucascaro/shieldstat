@@ -12,6 +12,7 @@ extension PostureState {
         case .private: "Private"
         case .publiclyAddressable: "Publicly Addressable"
         case .directlyExposed: "Directly Exposed"
+        case .exposedService: "Exposed Service"
         }
     }
 
@@ -24,6 +25,7 @@ extension PostureState {
         case .private: "Private"
         case .publiclyAddressable: "Public v6"
         case .directlyExposed: "Exposed"
+        case .exposedService: "Open Port"
         }
     }
 
@@ -37,6 +39,8 @@ extension PostureState {
             "This Mac holds a globally-routable IPv6 address. Whether anything filters inbound traffic cannot be determined locally."
         case .directlyExposed:
             "This Mac holds a globally-routable IPv4 address. Nothing is NATing it."
+        case .exposedService:
+            "This Mac is reachable from outside and something is listening on it. Either fact on its own would be milder."
         }
     }
 }
