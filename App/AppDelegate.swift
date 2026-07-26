@@ -41,6 +41,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await model.notifierAuthorization() }
     }
 
+    /// The menu bar item is the app; the settings window is incidental.
+    ///
+    /// Without this, closing the settings window quits ShieldStat outright: the
+    /// only SwiftUI Scene is that Window, so once it closes SwiftUI sees no
+    /// windows left and terminates. It looks exactly like a crash — the item
+    /// vanishes with no fault, no crash report and nothing on stderr, because
+    /// it is an orderly exit rather than a fault.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
     private func refreshButton() {
         guard let button = statusItem?.button else {
             Self.log.error("status item has no button — nothing will be visible")

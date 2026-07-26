@@ -57,6 +57,7 @@ struct SettingsView: View {
         .fixedSize(horizontal: false, vertical: true)
         .onChange(of: settings.debounceSeconds) { model.settingsChanged() }
         .onChange(of: settings.bypassAlert) { model.settingsChanged() }
+        .onChange(of: settings.labelDisplay) { model.redraw() }
     }
 
     private func muteSubtitle(_ mute: FactMute) -> String {

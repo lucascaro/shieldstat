@@ -37,9 +37,11 @@ final class StatusModel {
     // how stale the verdict can get. getifaddrs costs microseconds.
     private static let safetyPollInterval: TimeInterval = 60
 
-    init(settings: AppSettings, notifier: Notifier = Notifier()) {
+    // Notifier is main-actor isolated, so it cannot be a default argument —
+    // default arguments are evaluated in a nonisolated context.
+    init(settings: AppSettings, notifier: Notifier? = nil) {
         self.settings = settings
-        self.notifier = notifier
+        self.notifier = notifier ?? Notifier()
         tracker = SeverityTracker(debounce: settings.debounceSeconds, bypassing: settings.bypassing)
     }
 
@@ -86,6 +88,13 @@ final class StatusModel {
     /// Forces an immediate re-evaluation, for when the user does not believe us.
     func refresh() {
         evaluate()
+    }
+
+    /// Redraws the menu bar item without re-evaluating. Display settings change
+    /// how the item is drawn, not what is true, and the item is AppKit so it
+    /// does not observe the settings object.
+    func redraw() {
+        onUpdate?()
     }
 
     func evaluate(now: Date = Date()) {
