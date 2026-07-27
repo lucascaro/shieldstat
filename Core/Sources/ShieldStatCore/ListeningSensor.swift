@@ -24,10 +24,10 @@ public enum ListenerKey: Hashable, Sendable, Codable {
 
 /// A TCP socket in LISTEN state.
 ///
-/// `process` is best-effort: an unprivileged `lsof` names sockets owned by the
-/// current user — measured, 8 of 21 wildcard listeners on a real machine — and
-/// those are exactly the user-facing apps worth dismissing. The rest are system
-/// daemons, nameable only by a root helper this project declines to install.
+/// `process` is best-effort. Between `netstat -anv`, which names root-owned
+/// sockets but truncates, and `lsof`, which is untruncated but unprivileged,
+/// nearly everything gets a name — measured, 22 of 22 wildcard listeners on a
+/// real machine. Anything neither can name falls back to a bare port.
 public struct ListeningSocket: Sendable, Equatable, Hashable, Codable {
     public let port: UInt16
     public let scope: BindScope

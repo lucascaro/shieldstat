@@ -35,16 +35,31 @@ describes egress and says nothing about who can reach you.
 _Avoid_: Primary interface, main connection, active interface
 
 **Listening Socket**:
-A TCP socket in LISTEN state, identified by its port and its Bind Scope. Never by the process
-holding it — naming that requires privilege this project declines to take.
+A TCP socket in LISTEN state, identified by its port and its Bind Scope. The process name is
+attached where it can be read without privilege, but it is context — two sockets are the same
+Listening Socket when port and Bind Scope match, whoever holds them.
 _Avoid_: Open port, service, daemon
 
 **Dismissal**:
 A declaration that a Listening Socket is expected on this machine. Suppresses the `notice` it would
 otherwise raise, and is ignored entirely once the machine becomes reachable — it means "expected",
-never "safe to expose". Keyed to the process name where known, otherwise to the port. Distinct from
-a [[Mute]], which suppresses notifications and never changes what the glyph shows.
+never "safe to expose". Keyed to the port. Dismissing every port a process opens, now and in future,
+is a [[Broad Dismissal]] and a separate action. Distinct from a [[Mute]], which suppresses
+notifications and never changes what the glyph shows.
 _Avoid_: Ignore, allowlist, exception, mute
+
+**Broad Dismissal**:
+A Dismissal keyed to a process name rather than a port, covering every port that process opens
+including ones it has not opened yet. Always an explicit choice, never the default — Spotify's
+rotating peer-discovery port is the case that wants it, and Docker publishing arbitrary ports is the
+case that makes it dangerous.
+_Avoid_: Dismiss all, process dismissal, blanket ignore
+
+**System Service Baseline**:
+The fixed set of processes macOS starts on its own behalf, dismissed automatically so a fresh
+install is not already warning. Excludes anything a user switched on — SSH, file sharing, NFS,
+Screen Sharing. Automatic dismissal is a blind spot by construction, so it is a visible toggle.
+_Avoid_: Whitelist, known good, safe list
 
 **Bind Scope**:
 Where a Listening Socket is bound: `loopback`, `allInterfaces`, or `specificAddress`. Decides

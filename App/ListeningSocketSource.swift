@@ -4,12 +4,10 @@ import ShieldStatCore
 /// Enumerates listening TCP sockets, with process names where they can be had
 /// without privilege.
 ///
-/// `netstat` sees every socket but names none. `lsof` names them but, without
-/// root, only the current user's — measured, 8 of 21 wildcard listeners on a
-/// real machine. Those 8 are the user-facing apps worth dismissing (Spotify,
-/// Docker, Control Center); the remainder are system daemons, nameable only by
-/// a root helper this project declines to install. Using both gives every
-/// socket with a name attached wherever one is obtainable.
+/// `netstat -anv` names every socket including root-owned ones, but truncates
+/// at 16 characters and breaks on spaces. `lsof` gives untruncated names but,
+/// without root, only for the current user's sockets. Using both names nearly
+/// everything — measured, 22 of 22 wildcard listeners on a real machine.
 enum ListeningSocketSource {
     static func sockets() -> [ListeningSocket] {
         ListeningSensor.parse(

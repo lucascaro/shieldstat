@@ -44,6 +44,15 @@ and a permanent yellow would be ignored. Dogfooding overruled it: anything liste
 a problem waiting for a network change, and silence was the wrong answer. Dismissal is what keeps it
 usable — the warning becomes about listeners that appear *later*, not about macOS.
 
+**The system-service baseline** dismisses a fixed set of processes macOS starts on its own behalf —
+Control Center's AirPlay receiver, `rapportd`, `sharingd`, `AirPlayXPCHelper`, `remotepairingdeviced`,
+`identityservicesd` — so a fresh install is not yellow on arrival. It draws the line at services the
+operating system manages and the user never switched on: SSH, SMB, AFP, NFS and Screen Sharing stay
+visible, because somebody turned each of those on and might want to know it is still on. Auto-dismissal
+is a blind spot by construction, so it is a visible toggle rather than a constant — a blind spot the
+user cannot see is one they cannot reconsider. It composes with the user's own dismissals rather than
+replacing them, and like every dismissal it stops applying the moment the machine is reachable.
+
 **Correlation.** If the address severity is at least `notice` *and* anything non-loopback is
 listening, the state becomes **Exposed Service** at `alert`, and **dismissals do not apply**. A
 dismissal means "this service is expected on my machine", not "this service is safe to expose" —
@@ -65,16 +74,33 @@ TCP sockets in LISTEN state, classified by bind scope: `loopback` (`127.0.0.1`, 
 `allInterfaces` (`*`, `0.0.0.0`, `::`), or `specificAddress`. A port listening on tcp4 and tcp6 is
 one service, not two.
 
-Read by parsing `netstat -an -p tcp` for the sockets and `lsof -iTCP -sTCP:LISTEN -P -n` for process
-names, both unprivileged. `netstat` sees every socket and names none; `lsof` without root names only
-the current user's — measured, 20 of 34 sockets on a real machine. Those are the user-facing apps
-worth dismissing, and the unnamed remainder are system daemons. Naming those too would need a
-permanently installed root helper, and a passive monitor should not require more privilege than the
-thing it monitors.
+Read by parsing `netstat -anv -p tcp` for the sockets and `lsof +c 0 -iTCP -sTCP:LISTEN -P -n` for
+process names, both unprivileged. Neither alone is enough:
 
-Names matter because they are what a dismissal is keyed to. Spotify holds 57621 permanently and an
-ephemeral port besides; a port-keyed dismissal would decay every time the ephemeral one rotated.
-Dismissals key on the process name where known and fall back to the port otherwise.
+| Source | Covers | Fails on |
+|---|---|---|
+| `netstat -anv` | every socket, root-owned included, via the `process:pid` column | truncates at 16 characters and breaks on spaces, so `Discord Helper (Renderer)` is unusable |
+| `lsof` | untruncated names, `+c 0` lifting the 9-character default | without root, only the current user's sockets |
+
+`lsof`'s name wins where there is one, and `netstat` fills the rest. An earlier version used plain
+`netstat -an`, which names nothing, and concluded that root-owned daemons were unnameable without a
+privileged helper. The `-v` column disproved that. Measured on a real machine: 37 listening sockets,
+all 22 wildcard ones named.
+
+Names matter because they are what the user reads, and because dismissing everything one process
+opens is offered as an action. Truncation is therefore not cosmetic — `com.docke` is not a key
+anyone would recognise a week later.
+
+**A plain dismissal keys on the port, not the process.** Process-keying was the original choice, on
+the grounds that Spotify holds 57621 permanently plus a rotating ephemeral port, so a port key would
+decay. It is the wrong default: Docker's entire job is publishing arbitrary ports, and one click on
+one Docker port would silently cover every port Docker opens later. The broad key still exists as a
+separate, explicitly labelled action ("all Docker"), and is offered only where a name exists.
+
+Where no name exists, a short note on what the port conventionally carries stands in — "NFS", "CUPS
+printing", or, below 1024, "System service (privileged port)", which at least says a root process
+opened it. Above 1024 with no name and no convention, the app says nothing rather than guessing: a
+bare number is honest, and a dismissal made on a guess is worse than no dismissal.
 
 Both commands run on every evaluation, since a listener is now a `notice` even behind NAT and so the
 verdict depends on them in every case.
@@ -138,9 +164,19 @@ relaunching.
 ## UI
 
 Single shield glyph, differentiated by *shape* rather than colour alone, so Severity survives
-colourblindness and monochrome menu bar rendering. A short text label appears alongside it —
-`always | never | whenNotOK`, default `whenNotOK`. Clicking opens the detail panel listing each
-Fact, which interface carries the default route, and recent Transitions.
+colourblindness and monochrome menu bar rendering. A short text label appears alongside it, on a
+threshold: Always, Alerts (`alert` only), Warnings (anything not `ok`, the default), Never. Alerts
+and Warnings were one option originally, which forced anyone who wanted the label for real trouble
+to accept it for every yellow posture too. Clicking opens the detail panel listing each Fact, which
+interface carries the default route, and recent Transitions.
+
+Each reachable listener in the panel carries a **?** button opening a web search for what that
+process is and whether it should be listening. Deliberately a search rather than a built-in verdict
+table: the honest answer for most ports is "it depends what you installed", and a table that guessed
+would be trusted further than it deserves. It is also the only thing in the app that touches the
+network, so it fires on a click and never on its own. The query is built in `Core/` and tested there
+— the process name goes in unquoted, because quoting looked like precision and is the opposite
+(measured on `symptomsd`: quoted returned nothing, bare returned useful results).
 
 `NSStatusItem` with an `NSPopover`, not `MenuBarExtra`; `LSUIElement` set so there is no Dock icon.
 
@@ -162,8 +198,16 @@ produces a window that is visible but neither key nor main; `NSApp.activate()` t
 and main. `activationPolicy` stays `.accessory` throughout — no policy toggling, no timing hacks.
 `makeKeyAndOrderFront` afterwards changes nothing. Both calls are required; neither is optional.
 
-Settings surface: label display mode, debounce duration, debounce bypass exceptions, launch at
-login, and the list of active Mutes.
+Settings is three tabs — General (label threshold, debounce duration, debounce bypass, launch at
+login), Dismissed (the system-service toggle and every dismissed listener, each restorable), Muted
+(every active Mute with the date it was created, each revocable). All three carry the caveat text
+next to the control it qualifies: what a dismissal does not cover, what a Mute cannot silence. The
+lists scroll inside their own section at a fixed window size, so that text cannot be pushed off the
+bottom by a long list, and switching tabs does not resize the window.
+
+Both suppression surfaces are listed exhaustively and individually revocable, for the reason ADR-0002
+gives about Mutes and which applies equally to Dismissals: a suppression the user cannot see is one
+they cannot reconsider.
 
 ## State
 
@@ -211,7 +255,8 @@ real `ifconfig` output, CGNAT, multi-GUA SLAAC, and secondary-interface exposure
   others' behalf.
 - **Developer ID signing and notarization.** Blocks handing a build to a friend, since Gatekeeper
   refuses unsigned apps and the override is buried. Packaging, not architecture.
-- **Any settings beyond the five listed above.**
+- **Any setting that is not one of the ones listed above.** The bar is that a setting exists because
+  the app would otherwise be wrong for someone, not because a preference is imaginable.
 
 ## Dogfooding instrumentation
 

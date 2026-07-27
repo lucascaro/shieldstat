@@ -24,14 +24,19 @@ between sitting behind NAT and sitting on the open internet.
 **Listening services** — TCP sockets in LISTEN state, by bind scope. Anything bound to all
 interfaces is a problem waiting for a network change, so it is flagged — but a Mac has around 20 of
 them, so each is individually dismissible, and there is a bulk action to accept the current set as a
-baseline. The warning is then about listeners that appear *later*.
+baseline. The warning is then about listeners that appear *later*. The handful macOS starts on its
+own behalf — AirPlay, Continuity, Handoff — are dismissed out of the box, behind a toggle you can
+switch off. SSH, file sharing, NFS and Screen Sharing are not: somebody turned each of those on.
 
 Dismissals are ignored the moment the machine becomes reachable. A dismissal means "this service is
-expected on my machine", not "this service is safe to expose".
+expected on my machine", not "this service is safe to expose". A dismissal covers one port; covering
+every port a process opens is a second, separate click, because Docker's whole job is publishing
+ports you did not ask about individually.
 
-Process names come from an unprivileged `lsof`, which sees the current user's sockets — enough to
-name Spotify, Docker and the like. System daemons show as bare port numbers; naming those would need
-a root helper, and a passive monitor should not require more privilege than the thing it monitors.
+Process names come from `netstat -anv` and `lsof`, both unprivileged. Between them almost everything
+gets a name, root-owned daemons included — `netstat` sees every socket, `lsof` supplies the names
+`netstat` truncates. Each listener also carries a **?** button that searches the web for what it is
+and whether it should be listening.
 
 Every interface that is up and running is evaluated the same way. A public address on a forgotten
 secondary interface counts exactly as much as one on your primary connection — the default route
@@ -60,7 +65,7 @@ Requires Xcode 26 or later.
 ```sh
 git clone https://github.com/lucascaro/shieldstat
 cd shieldstat
-swift test --package-path Core     # 67 tests, no network, no machine dependencies
+swift test --package-path Core     # 120 tests, no network, no machine dependencies
 xcodebuild -project ShieldStat.xcodeproj -scheme ShieldStat -configuration Release build
 ```
 
