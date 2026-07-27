@@ -16,7 +16,8 @@ enum ListeningSocketSource {
             netstat: run("/usr/sbin/netstat", ["-anv", "-p", "tcp"]) ?? "",
             // +c 0 lifts the 9-character cap on the COMMAND column, which
             // otherwise reports "com.docke" for com.docker.backend. The name is
-            // what a dismissal keys on, so a truncated one is not cosmetic.
+            // what the user reads and what a broad dismissal keys on, so a
+            // truncated one is not cosmetic.
             lsof: run("/usr/sbin/lsof", ["+c", "0", "-iTCP", "-sTCP:LISTEN", "-P", "-n"]) ?? ""
         )
     }

@@ -35,9 +35,9 @@ describes egress and says nothing about who can reach you.
 _Avoid_: Primary interface, main connection, active interface
 
 **Listening Socket**:
-A TCP socket in LISTEN state, identified by its port and its Bind Scope. The process name is
-attached where it can be read without privilege, but it is context — two sockets are the same
-Listening Socket when port and Bind Scope match, whoever holds them.
+A TCP socket in LISTEN state, identified by its port and its Bind Scope, with the process name
+attached wherever it can be read without privilege. The same service listening over IPv4 and IPv6 is
+one Listening Socket, not two.
 _Avoid_: Open port, service, daemon
 
 **Dismissal**:
@@ -50,10 +50,11 @@ _Avoid_: Ignore, allowlist, exception, mute
 
 **Broad Dismissal**:
 A Dismissal keyed to a process name rather than a port, covering every port that process opens
-including ones it has not opened yet. Always an explicit choice, never the default — Spotify's
-rotating peer-discovery port is the case that wants it, and Docker publishing arbitrary ports is the
-case that makes it dangerous.
-_Avoid_: Dismiss all, process dismissal, blanket ignore
+including ones it has not opened yet. Never what a click on a listener does — Spotify's rotating
+peer-discovery port is the case that wants it, and Docker publishing arbitrary ports is the case that
+makes it dangerous. The [[System Service Baseline]] is the one set of Broad Dismissals the user did
+not make individually, which is why it is confined to processes macOS runs and sits behind a toggle.
+_Avoid_: Blanket ignore, allowlist, trust
 
 **System Service Baseline**:
 The fixed set of processes macOS starts on its own behalf, dismissed automatically so a fresh

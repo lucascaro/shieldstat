@@ -33,10 +33,11 @@ expected on my machine", not "this service is safe to expose". A dismissal cover
 every port a process opens is a second, separate click, because Docker's whole job is publishing
 ports you did not ask about individually.
 
-Process names come from `netstat -anv` and `lsof`, both unprivileged. Between them almost everything
-gets a name, root-owned daemons included — `netstat` sees every socket, `lsof` supplies the names
-`netstat` truncates. Each listener also carries a **?** button that searches the web for what it is
-and whether it should be listening.
+Process names come from `netstat -anv` and `lsof`, both unprivileged. `netstat` names every socket
+including root-owned daemons, but truncates; `lsof` is untruncated but only sees your own sockets, so
+it fills in the names `netstat` mangles. On the author's machine all 22 wildcard listeners are named.
+Each listener also carries a **?** button that searches the web for what it is and whether it should
+be listening.
 
 Every interface that is up and running is evaluated the same way. A public address on a forgotten
 secondary interface counts exactly as much as one on your primary connection — the default route

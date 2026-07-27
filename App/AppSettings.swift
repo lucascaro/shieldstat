@@ -5,11 +5,10 @@ import ShieldStatCore
 
 /// When the short text label sits next to the glyph in the menu bar.
 enum LabelDisplay: String, CaseIterable, Identifiable {
-    /// Raw values are persisted, so `whenNotOK` keeps its old spelling.
-    case always
-    case alertsOnly = "alertsOnly"
-    case whenNotOK = "whenNotOK"
-    case never
+    /// The raw values are what `UserDefaults` holds, so renaming a case silently
+    /// resets that user to the default. `whenNotOK` keeps its original spelling
+    /// for that reason, even though it now reads as "Warnings".
+    case always, alertsOnly, whenNotOK, never
 
     var id: String { rawValue }
 

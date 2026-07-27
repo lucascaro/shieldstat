@@ -87,9 +87,9 @@ process names, both unprivileged. Neither alone is enough:
 privileged helper. The `-v` column disproved that. Measured on a real machine: 37 listening sockets,
 all 22 wildcard ones named.
 
-Names matter because they are what the user reads, and because dismissing everything one process
-opens is offered as an action. Truncation is therefore not cosmetic — `com.docke` is not a key
-anyone would recognise a week later.
+Names matter because they are what the user reads, and because the broad dismissal below keys on
+one. Truncation is therefore not cosmetic — `com.docke` is not a name anyone would recognise a week
+later, nor one that would still match after an update.
 
 **A plain dismissal keys on the port, not the process.** Process-keying was the original choice, on
 the grounds that Spotify holds 57621 permanently plus a rotating ephemeral port, so a port key would
@@ -205,9 +205,11 @@ next to the control it qualifies: what a dismissal does not cover, what a Mute c
 lists scroll inside their own section at a fixed window size, so that text cannot be pushed off the
 bottom by a long list, and switching tabs does not resize the window.
 
-Both suppression surfaces are listed exhaustively and individually revocable, for the reason ADR-0002
-gives about Mutes and which applies equally to Dismissals: a suppression the user cannot see is one
-they cannot reconsider.
+Every Mute and every dismissal the user made is listed and individually revocable, for the reason
+ADR-0002 gives about Mutes and which applies equally to Dismissals: a suppression the user cannot see
+is one they cannot reconsider. The system-service baseline is the one suppression not enumerated
+socket by socket — it is a fixed set the user did not choose, so it is shown as what it is, one
+labelled toggle naming what it covers and what it deliberately does not.
 
 ## State
 

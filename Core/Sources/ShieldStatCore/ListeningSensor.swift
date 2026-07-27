@@ -13,10 +13,8 @@ public enum BindScope: String, Sendable, Codable, CaseIterable {
 
 /// What a Dismissal is keyed to.
 ///
-/// Process name where it is known, because ports are not stable: Spotify holds
-/// 57621 permanently but also an ephemeral port that rotates, and a port-keyed
-/// dismissal would decay every time it moved. Falls back to the port for the
-/// root-owned daemons an unprivileged `lsof` cannot name.
+/// A plain dismissal keys on the port; `process` is the broader key behind an
+/// explicit action. See `ListeningSocket.key` for why that way round.
 public enum ListenerKey: Hashable, Sendable, Codable {
     case process(String)
     case port(UInt16)
