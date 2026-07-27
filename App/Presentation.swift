@@ -91,6 +91,17 @@ extension Severity {
     }
 }
 
+extension ListenerKey {
+    /// How a dismissal reads in a list. Also the sort key — dismissals live in
+    /// a Set, so without an explicit order the rows shuffle between renders.
+    var label: String {
+        switch self {
+        case .process(let name): name
+        case .port(let port): "port \(port)"
+        }
+    }
+}
+
 extension ListeningSocket {
     /// What clicking dismiss will actually do. The plain action is deliberately
     /// narrow — this port and no other — so the control says "only" to

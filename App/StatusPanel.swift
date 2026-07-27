@@ -13,27 +13,44 @@ struct StatusPanel: View {
 
     @Environment(\.openWindow) private var openWindow
 
+    /// Enough for a dozen listeners before scrolling starts, and short enough
+    /// that the popover still fits above the Dock on a laptop display.
+    private static let scrollHeight: CGFloat = 380
+
+    /// The header carries the verdict and the footer carries Refresh, Settings
+    /// and Quit, so both stay pinned. Only the detail between them scrolls —
+    /// unbounded, a machine with fifteen listeners pushed the footer off the
+    /// bottom of the screen.
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
             Divider()
-            factList
-            if !model.verdict.raisingListeners.isEmpty {
-                Divider()
-                portList
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    factList
+                    if !model.verdict.raisingListeners.isEmpty {
+                        Divider()
+                        portList
+                    }
+                    if !model.localOnlyListeners.isEmpty || !model.dismissedListeners.isEmpty {
+                        Divider()
+                        quietList
+                    }
+                    if model.observedSeverity != .ok {
+                        Divider()
+                        muteControls
+                    }
+                    if !model.history.isEmpty {
+                        Divider()
+                        historyList
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if !model.localOnlyListeners.isEmpty || !model.dismissedListeners.isEmpty {
-                Divider()
-                quietList
-            }
-            if model.observedSeverity != .ok {
-                Divider()
-                muteControls
-            }
-            if !model.history.isEmpty {
-                Divider()
-                historyList
-            }
+            .frame(maxHeight: Self.scrollHeight)
+            .scrollBounceBehavior(.basedOnSize)
+
             Divider()
             footer
         }
