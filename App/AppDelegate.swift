@@ -91,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch settings.labelDisplay {
         case .always: true
         case .never: false
+        case .alertsOnly: model.observedSeverity == .alert
         case .whenNotOK: model.observedSeverity != .ok
         }
     }

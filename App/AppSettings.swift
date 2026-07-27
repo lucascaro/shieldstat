@@ -5,14 +5,19 @@ import ShieldStatCore
 
 /// When the short text label sits next to the glyph in the menu bar.
 enum LabelDisplay: String, CaseIterable, Identifiable {
-    case always, whenNotOK, never
+    /// Raw values are persisted, so `whenNotOK` keeps its old spelling.
+    case always
+    case alertsOnly = "alertsOnly"
+    case whenNotOK = "whenNotOK"
+    case never
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .always: "Always"
-        case .whenNotOK: "Only when not OK"
+        case .alertsOnly: "Alerts"
+        case .whenNotOK: "Warnings"
         case .never: "Never"
         }
     }
