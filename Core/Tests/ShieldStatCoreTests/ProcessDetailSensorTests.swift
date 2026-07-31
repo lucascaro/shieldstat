@@ -24,10 +24,13 @@ tcp4       0      0  *.8080                 *.*                    LISTEN       
 """
 
 /// Real `ps -o pid=,uid=,lstart=,etime=,args=` output, covering every `etime`
-/// shape: minutes, hours, and days.
+/// shape: minutes, hours, and days. Pid 7171 carries a single-digit day, which
+/// `lstart` pads to a double space — the shape the positional read depends on
+/// `omittingEmptySubsequences` to absorb, and which a third of every month has.
 private let realPS = """
     1     0 Thu May 21 14:22:40 2026     70-08:09:25 /sbin/launchd
   318     0 Thu May 21 14:24:58 2026     10:01:23 /usr/sbin/systemstats --daemon
+ 7171   501 Tue Jun  2 09:44:13 2026     59-04:12:55 /Applications/Discord.app/Contents/MacOS/Discord
 62102   501 Sun Jul 26 20:39:41 2026     01:23 node /Users/lucascaro/checkout/keto-copilot/node_modules/.bin/next dev
 """
 
@@ -88,6 +91,16 @@ struct ProcessDetailSensorTests {
         #expect(owners.first { $0.port == 20599 }?.addressDescription == "127.0.0.1:20599")
     }
 
+    /// `::1:8021` reads as a run of colons, not an address and a port. This
+    /// string is shown verbatim in the detail window, and IPv6 loopback is the
+    /// ordinary case for a local dev server.
+    @Test("An IPv6 literal is bracketed, an IPv4 one and the wildcard are not")
+    func bracketsIPv6() {
+        let owners = ProcessDetailSensor.owners(netstat: realNetstat)
+        #expect(owners.first { $0.port == 8021 }?.addressDescription == "[::1]:8021")
+        #expect(owners.first { $0.port == 916 }?.addressDescription == "*:916")
+    }
+
     @Test("Scope still agrees with what ListeningSensor would decide")
     func scopeMatchesListeningSensor() {
         let owners = ProcessDetailSensor.owners(netstat: realNetstat)
@@ -111,6 +124,18 @@ struct ProcessDetailSensorTests {
         let lines = ProcessDetailSensor.processes(ps: realPS)
         #expect(lines[1]?.startedAt == "Thu May 21 14:22:40 2026")
         #expect(lines[62102]?.startedAt == "Sun Jul 26 20:39:41 2026")
+    }
+
+    /// A single-digit day is padded to a double space, so the row has the same
+    /// five lstart fields as any other only if empty subsequences are dropped.
+    /// Read the wrong way, etime and argv both shift a column and the identity
+    /// guard starts comparing an elapsed time it can never match.
+    @Test("A single-digit day in lstart does not shift the columns after it")
+    func startedAtSurvivesPaddedDay() {
+        let lines = ProcessDetailSensor.processes(ps: realPS)
+        #expect(lines[7171]?.startedAt == "Tue Jun 2 09:44:13 2026")
+        #expect(lines[7171]?.elapsed == "59-04:12:55")
+        #expect(lines[7171]?.arguments == "/Applications/Discord.app/Contents/MacOS/Discord")
     }
 
     /// The identity guard keys on startedAt precisely because elapsed drifts.

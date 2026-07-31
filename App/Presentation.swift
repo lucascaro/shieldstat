@@ -114,11 +114,17 @@ extension ListeningSocket {
 extension ListeningSocket {
     /// The one thing about a listener that decides whether it matters, said in
     /// the detail window where there is room to say it in full.
-    var reachabilityDescription: String {
+    ///
+    /// Says what the bind *is*, never what it makes possible. Reachable is a
+    /// reserved term — it means a confirmed inbound connection, which no sensor
+    /// here can establish — so a wildcard bind is described as a wildcard bind
+    /// and the firewall, route and NAT that sit in front of it are left named
+    /// rather than assumed away.
+    var scopeDescription: String {
         switch scope {
         case .loopback: "Bound to loopback — nothing outside this Mac can reach it."
-        case .allInterfaces: "Bound to every interface — reachable from any network this Mac joins."
-        case .specificAddress: "Bound to one interface address — reachable from that network."
+        case .allInterfaces: "Bound to every interface. Network policy can still block remote connections."
+        case .specificAddress: "Bound to one interface address. Network policy can still block remote connections."
         }
     }
 }

@@ -95,7 +95,7 @@ struct ListenerDetailView: View {
             if let note = socket.portDescription {
                 Text(note).font(.caption).foregroundStyle(.secondary)
             }
-            Text(socket.reachabilityDescription)
+            Text(socket.scopeDescription)
                 .font(.caption)
                 .foregroundStyle(socket.isReachable ? .red : .secondary)
         }

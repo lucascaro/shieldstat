@@ -22,8 +22,14 @@ public struct SocketOwner: Sendable, Equatable, Hashable, Codable {
         self.address = address
     }
 
-    /// How the bind reads in full: `*:3000`, `127.0.0.1:8000`.
-    public var addressDescription: String { "\(address):\(port)" }
+    /// How the bind reads in full: `*:3000`, `127.0.0.1:8000`, `[::1]:8021`.
+    ///
+    /// An IPv6 literal is bracketed, because `::1:8021` reads as a run of
+    /// colons rather than an address and a port. That is the RFC 3986 form and
+    /// what every other tool prints.
+    public var addressDescription: String {
+        address.contains(":") ? "[\(address)]:\(port)" : "\(address):\(port)"
+    }
 }
 
 /// One `ps` row. Split out from `ListenerProcess` because it is exactly what the

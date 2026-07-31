@@ -270,11 +270,16 @@ struct StatusPanel: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, model.localOnlyListeners.isEmpty ? 0 : 4)
+                    // Clickable like every other row: a dismissal suppresses a
+                    // notice, it does not make "what is this" a less useful
+                    // question — arguably the opposite, for one accepted a while ago.
                     ForEach(model.dismissedListeners, id: \.self) { listener in
-                        Text(listener.label)
-                            .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        detailButton(listener) {
+                            Text(listener.label)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
             }
