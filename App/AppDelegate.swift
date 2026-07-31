@@ -15,6 +15,7 @@ import ShieldStatCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let settings = AppSettings()
     private(set) lazy var model = StatusModel(settings: settings)
+    let detail = ListenerDetailModel()
 
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
@@ -31,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         popover.behavior = .transient
         popover.contentViewController = NSHostingController(
-            rootView: StatusPanel(model: model, settings: settings)
+            rootView: StatusPanel(model: model, settings: settings, detail: detail)
         )
 
         model.onUpdate = { [weak self] in self?.refreshButton() }

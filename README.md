@@ -1,10 +1,11 @@
 # ShieldStat
 
 A passive macOS menu bar monitor of local security posture. It observes and reports; it never
-protects, blocks, or intervenes.
+protects, blocks, or intervenes on its own.
 
-**Not a VPN, firewall, or antivirus.** It changes nothing about your machine. The only thing it does
-is tell you what is already true.
+**Not a VPN, firewall, or antivirus.** Nothing it does happens on its own initiative. It watches, it
+tells you what is already true, and it hands you the controls — the one thing it will act on is a
+button you pressed, and quitting a process you own is a user action, not the app intervening.
 
 ## What it currently checks
 
@@ -38,6 +39,19 @@ including root-owned daemons, but truncates; `lsof` is untruncated but only sees
 it fills in the names `netstat` mangles. On the author's machine all 22 wildcard listeners are named.
 Each listener also carries a **?** button that searches the web for what it is and whether it should
 be listening.
+
+Clicking a listener opens a window naming what holds it: the pid, the executable path as the kernel
+reports it, the user it runs as, when it started and how long it has run, the command line, the exact
+address it bound, and every other port the same process is listening on. A port held by more than one
+process — a pre-forking server, an `SO_REUSEPORT` listener — gets a section each rather than a guess
+at which is the real one.
+
+From there you can quit the process, force quit it behind a confirmation, or reveal the binary in
+Finder. Quitting is the user's action, not the app's: nothing stops on its own. Processes you do not
+own are read-only, and the buttons say so instead of failing when pressed — signalling them needs a
+privileged helper ShieldStat does not install. A pid is only ever signalled after its start time is
+re-read and still matches what the window is showing, so a pid the system has since recycled is
+refused rather than killed by mistake.
 
 Every interface that is up and running is evaluated the same way. A public address on a forgotten
 secondary interface counts exactly as much as one on your primary connection — the default route

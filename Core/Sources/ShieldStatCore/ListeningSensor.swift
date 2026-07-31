@@ -164,7 +164,7 @@ public enum ListeningSensor {
 
     /// `*.3000`, `127.0.0.1.8000`, `::1.8021`, `192.168.50.119.7000` — the port
     /// is always after the final dot, whatever the address family.
-    private static func parseLocalAddress(_ field: String) -> ListeningSocket? {
+    static func parseLocalAddress(_ field: String) -> ListeningSocket? {
         guard let separator = field.lastIndex(of: "."),
               let port = UInt16(field[field.index(after: separator)...])
         else { return nil }
