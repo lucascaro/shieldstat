@@ -12,7 +12,7 @@ import ShieldStatCore
 @Observable
 final class ListenerDetailModel {
     private(set) var socket: ListeningSocket?
-    private(set) var processes: [ListenerProcess] = []
+    private(set) var detail: ListenerDetail = .unattributed
 
     func show(_ socket: ListeningSocket) {
         self.socket = socket
@@ -21,7 +21,7 @@ final class ListenerDetailModel {
 
     func reload() {
         guard let socket else { return }
-        processes = ProcessDetailSource.processes(listeningOn: socket.port)
+        detail = ProcessDetailSource.detail(listeningOn: socket.port)
     }
 }
 
@@ -47,17 +47,30 @@ struct ListenerDetailView: View {
                 header(socket)
                 Divider()
 
-                if detail.processes.isEmpty {
-                    // Reached two ways: the socket closed between the click and
-                    // the read, or netstat named a pid that had already exited.
-                    // Both are ordinary, so neither reads as an error.
+                switch detail.detail {
+                case .processes(let processes):
+                    ForEach(processes, id: \.pid) { process in
+                        processSection(process, port: socket.port)
+                    }
+                case .gone:
+                    // Ordinary rather than an error: the socket closed between
+                    // the click and the read, or netstat named a pid that had
+                    // already exited. Either way there is nothing left to name.
                     Text("Nothing is listening on port \(String(socket.port)) any more.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                } else {
-                    ForEach(detail.processes, id: \.pid) { process in
-                        processSection(process, port: socket.port)
-                    }
+                case .unattributed:
+                    // The socket is real and still listening — it is on screen
+                    // behind this window. Saying "nothing is listening" here
+                    // would be flatly untrue, and untrue about the listener the
+                    // panel raises loudest.
+                    Text("Port \(String(socket.port)) is listening, but netstat names no process holding it.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Text("This is what an unprivileged read can see. `sudo lsof -iTCP:\(String(socket.port)) -sTCP:LISTEN` will name it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
                 }
 
                 if let failure {
