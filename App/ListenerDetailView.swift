@@ -12,16 +12,25 @@ import ShieldStatCore
 @Observable
 final class ListenerDetailModel {
     private(set) var socket: ListeningSocket?
-    private(set) var detail: ListenerDetail = .unattributed
+    private(set) var detail: ListenerDetail?
 
     func show(_ socket: ListeningSocket) {
         self.socket = socket
-        reload()
+        // Nil, not the last listener's answer: the read takes a beat now that it
+        // is off the main actor, and showing the previous socket's processes
+        // under the new socket's header would be worse than showing nothing.
+        detail = nil
+        Task { await reload() }
     }
 
-    func reload() {
+    func reload() async {
         guard let socket else { return }
-        detail = ProcessDetailSource.detail(listeningOn: socket.port)
+        let found = await ProcessDetailSource.detail(listeningOn: socket.port)
+        // A second click while this read was in flight wins. Without this the
+        // slower of two overlapping reads lands last and the window ends up
+        // describing whichever listener happened to answer later.
+        guard self.socket == socket else { return }
+        detail = found
     }
 }
 
@@ -48,6 +57,8 @@ struct ListenerDetailView: View {
                 Divider()
 
                 switch detail.detail {
+                case nil:
+                    Text("Reading…").font(.callout).foregroundStyle(.secondary)
                 case .processes(let processes):
                     ForEach(processes, id: \.pid) { process in
                         processSection(process, port: socket.port)
@@ -84,7 +95,7 @@ struct ListenerDetailView: View {
             HStack {
                 Button("Refresh") {
                     failure = nil
-                    detail.reload()
+                    Task { await detail.reload() }
                 }
                 Spacer()
             }
@@ -195,29 +206,30 @@ struct ListenerDetailView: View {
     }
 
     private func perform(_ process: ListenerProcess, force: Bool) {
-        switch ProcessDetailSource.quit(process, force: force) {
-        case .sent:
-            failure = nil
-            // Neither a signal nor a Quit event is synchronous: the process is
-            // still alive when this returns. Re-reading straight away would
-            // redraw the same section and read as the button having done
-            // nothing. A beat first, then both surfaces, so the panel behind
-            // the window agrees with it.
-            //
-            // ponytail: a fixed delay rather than watching for the process to
-            // go. An app that puts up a save dialog outlives it and needs the
-            // Refresh button; waiting properly means polling, and polling for
-            // something the user can see for themselves is not worth the code.
-            Task {
+        Task {
+            switch await ProcessDetailSource.quit(process, force: force) {
+            case .sent:
+                failure = nil
+                // Neither a signal nor a Quit event is synchronous: the process
+                // is still alive when this returns. Re-reading straight away
+                // would redraw the same section and read as the button having
+                // done nothing. A beat first, then both surfaces, so the panel
+                // behind the window agrees with it.
+                //
+                // ponytail: a fixed delay rather than watching for the process
+                // to go. An app that puts up a save dialog outlives it and
+                // needs the Refresh button; waiting properly means polling, and
+                // polling for something the user can see for themselves is not
+                // worth the code.
                 try? await Task.sleep(for: .milliseconds(600))
-                detail.reload()
+                await detail.reload()
                 model.refresh()
+            case .stale:
+                failure = "That process has already exited — pid \(process.pid) now belongs to something else. Nothing was sent."
+                await detail.reload()
+            case .failed(let reason):
+                failure = reason
             }
-        case .stale:
-            failure = "That process has already exited — pid \(process.pid) now belongs to something else. Nothing was sent."
-            detail.reload()
-        case .failed(let reason):
-            failure = reason
         }
     }
 }

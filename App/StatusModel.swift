@@ -41,6 +41,8 @@ final class StatusModel {
     private let routeEvents = RouteEventSource()
     private var safetyPoll: Timer?
     private var settleTimer: Timer?
+    private var evaluating = false
+    private var reevaluationPending = false
 
     /// Called after every evaluation so the menu bar item can redraw. The
     /// status item is AppKit, so it does not observe the model automatically.
@@ -141,7 +143,33 @@ final class StatusModel {
         onUpdate?()
     }
 
+    /// Kicks off an evaluation and returns; enumerating listeners means two
+    /// subprocesses, and a route event or a button press must not wait on them.
+    ///
+    /// Overlapping requests coalesce rather than run in parallel. A route event
+    /// arriving mid-read would otherwise start a second evaluation that could
+    /// finish first, so the older verdict would land last and the tracker would
+    /// see the two out of order. One at a time, with at most one more queued —
+    /// a third request during the same read is already covered by the second.
     func evaluate(now: Date = Date()) {
+        guard !evaluating else {
+            reevaluationPending = true
+            return
+        }
+        evaluating = true
+        Task {
+            await evaluateNow(now: now)
+            evaluating = false
+            if reevaluationPending {
+                reevaluationPending = false
+                // A fresh `now`: the queued request is about the machine as it
+                // is when it runs, not as it was when it was asked for.
+                evaluate()
+            }
+        }
+    }
+
+    private func evaluateNow(now: Date) async {
         let snapshot = SystemNetworkSource.snapshot()
         facts = ExposureSensor.facts(
             from: snapshot.addresses,
@@ -149,7 +177,7 @@ final class StatusModel {
         )
         // Listeners are always enumerated now: a wildcard listener is a notice
         // even behind NAT, so the verdict depends on them in every case.
-        listeners = ListeningSocketSource.sockets()
+        listeners = await ListeningSocketSource.sockets()
         verdict = Policy.evaluate(
             facts,
             listening: listeners,

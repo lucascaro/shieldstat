@@ -44,8 +44,8 @@ enum ProcessDetailSource {
     /// Usually one. A pre-forking server or an `SO_REUSEPORT` listener gives
     /// several, and they are all returned — picking a "main" one would be a
     /// guess, and the window has room to show what is actually there.
-    static func detail(listeningOn port: UInt16) -> ListenerDetail {
-        let owners = ProcessDetailSensor.owners(
+    static func detail(listeningOn port: UInt16) async -> ListenerDetail {
+        let owners = await ProcessDetailSensor.owners(
             netstat: Subprocess.run("/usr/sbin/netstat", ["-anv", "-p", "tcp"]) ?? ""
         )
 
@@ -56,7 +56,7 @@ enum ProcessDetailSource {
         // clicking the very listener the user most wants named.
         guard !pids.isEmpty else { return .unattributed }
 
-        let lines = processLines(for: pids)
+        let lines = await processLines(for: pids)
 
         // A pid netstat still lists can already be gone — measured, 2 of 13 on a
         // real machine. No ps row means no process, so it is dropped rather than
@@ -90,10 +90,10 @@ enum ProcessDetailSource {
     /// of the press, and compared against the one captured when the window
     /// opened. `startedAt` and not `elapsed`: elapsed time advances every
     /// second, so comparing it would refuse every press.
-    static func quit(_ process: ListenerProcess, force: Bool) -> QuitOutcome {
+    static func quit(_ process: ListenerProcess, force: Bool) async -> QuitOutcome {
         // uid as well as the start instant: lstart has one-second granularity, so
         // a pid reused inside the same second would otherwise compare equal.
-        guard let current = processLines(for: [process.pid])[process.pid],
+        guard let current = await processLines(for: [process.pid])[process.pid],
               current.startedAt == process.startedAt,
               current.uid == process.uid
         else {
@@ -124,9 +124,9 @@ enum ProcessDetailSource {
     /// `lstart` is the identity, `etime` is for reading, `uid` decides what the
     /// user is allowed to do, and `args` is what the process was launched with —
     /// readable here even for root-owned processes.
-    private static func processLines(for pids: [Int32]) -> [Int32: ProcessLine] {
+    private static func processLines(for pids: [Int32]) async -> [Int32: ProcessLine] {
         let arguments = ["-o", "pid=,uid=,lstart=,etime=,args=", "-p", pids.map(String.init).joined(separator: ",")]
-        return ProcessDetailSensor.processes(ps: Subprocess.run("/bin/ps", arguments) ?? "")
+        return await ProcessDetailSensor.processes(ps: Subprocess.run("/bin/ps", arguments) ?? "")
     }
 
     /// The kernel's answer for which binary is running, rather than `argv[0]`,
