@@ -19,19 +19,38 @@ enum Subprocess {
     /// section rather than a beachball.
     static let defaultTimeout: TimeInterval = 5
 
-    /// Runs the tool off the caller's actor and suspends until it answers.
+    /// Threads that are allowed to block, which no shared pool's are.
     ///
-    /// GCD rather than `Task.detached`: this blocks a thread for as long as the
-    /// subprocess takes, and the cooperative pool has about one thread per core
-    /// and is shared with everything else — blocking one of those is precisely
-    /// what it must not do.
+    /// `Task.detached` would block the cooperative pool, which has about one
+    /// thread per core and is shared with everything else. `DispatchQueue.global`
+    /// would block the system's shared worker pool, which tolerates it better
+    /// but is not ours to spend either. Both blocked threads per call live here
+    /// instead, where the only thing they can starve is another subprocess read.
+    ///
+    /// Two queues and not one, because each call has a thread that waits and a
+    /// thread that signals it. On a single queue that is a waiter depending on
+    /// the queue it is itself occupying — true deadlock only if the queue runs
+    /// out of width, which at two concurrent callers it never does, but the
+    /// safety of it would then rest on a call count nobody is watching.
+    private static let waiting = DispatchQueue(
+        label: "dev.lucascaro.ShieldStat.subprocess",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+    private static let reading = DispatchQueue(
+        label: "dev.lucascaro.ShieldStat.subprocess.read",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+
+    /// Runs the tool off the caller's actor and suspends until it answers.
     static func run(
         _ path: String,
         _ arguments: [String],
         timeout: TimeInterval = defaultTimeout
     ) async -> String? {
         await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            waiting.async {
                 continuation.resume(returning: capture(path, arguments, timeout: timeout))
             }
         }
@@ -72,7 +91,7 @@ enum Subprocess {
         // thread of its own to fire from.
         let output = Output()
         let finished = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .userInitiated).async {
+        reading.async {
             output.data = try? pipe.fileHandleForReading.readToEnd()
             finished.signal()
         }
