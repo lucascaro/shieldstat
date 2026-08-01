@@ -3,6 +3,7 @@ import Darwin
 import Foundation
 import OSLog
 import ShieldStatCore
+import ShieldStatSystem
 
 /// What happened when the user asked for a process to quit.
 enum QuitOutcome {

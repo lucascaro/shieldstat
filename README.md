@@ -86,6 +86,11 @@ xcodebuild -project ShieldStat.xcodeproj -scheme ShieldStat -configuration Relea
 
 The logic lives in `Core/`, a plain Swift package with no dependencies. `App/` is the macOS shell.
 
+`Core/` holds two modules. `ShieldStatCore` is pure: nothing in it reads a file, spawns a process, or
+asks the time, and everything it knows arrives as an argument. `ShieldStatSystem` is the one place
+that does spawn something — running a system tool with a deadline on it — kept separate so it is the
+named exception rather than the end of the rule.
+
 ## How it is put together
 
 Sensors observe and emit **facts** with no judgment attached. A single **policy** function maps the
@@ -93,8 +98,11 @@ whole set of facts to a state and a severity. That split exists so a second chec
 the first — "something is listening *and* you are directly exposed" is a thing this can say that
 `ifconfig` cannot.
 
-Everything in `Core/` is a pure function over data, so the entire test suite runs without a network
-in under a second.
+Every sensor and the policy are pure functions over data, so almost the entire test suite runs
+without a network, without fixtures, and in about ten milliseconds. The exception is
+`ShieldStatSystem`, whose tests do run real processes, because running real processes is the whole of
+what it does — those spend a second proving that a tool which never answers gets killed rather than
+hanging the app.
 
 ## Mutes
 

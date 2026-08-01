@@ -1,5 +1,6 @@
 import Foundation
 import ShieldStatCore
+import ShieldStatSystem
 
 /// Enumerates listening TCP sockets, with process names where they can be had
 /// without privilege.

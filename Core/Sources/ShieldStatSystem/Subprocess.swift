@@ -3,21 +3,26 @@ import OSLog
 
 /// Runs a system tool and returns its stdout.
 ///
-/// Extracted from `ListeningSocketSource` once the detail window became a second
-/// caller. The care here is not incidental. Reading before waiting avoids the
+/// A module of its own, and the only one in this package that touches anything
+/// outside its own arguments. `ShieldStatCore` is pure — no file, no process, no
+/// clock — which is what lets its tests run without fixtures, and that property
+/// is worth more than the convenience of one more file in it. Living here rather
+/// than in the App means the care below can be tested; in the App it could not.
+///
+/// The care is not incidental. Reading before waiting avoids the
 /// deadlock a full pipe buffer causes. Every failure comes back as `nil` rather
 /// than throwing, because a missing or failing tool must degrade the display and
 /// never take the app down with it. And the read is bounded, because a tool that
 /// answers slowly and a tool that never answers look identical from here —
 /// `lsof` on a wedged network mount is the stock example, and without a deadline
 /// it takes the whole app with it.
-enum Subprocess {
+public enum Subprocess {
     private static let log = Logger(subsystem: "dev.lucascaro.ShieldStat", category: "subprocess")
 
     /// Well past what a healthy `netstat`, `lsof` or `ps` takes — tens of
     /// milliseconds each — and short enough that a wedged one costs a missing
     /// section rather than a beachball.
-    static let defaultTimeout: TimeInterval = 5
+    public static let defaultTimeout: TimeInterval = 5
 
     /// Threads that are allowed to block, which no shared pool's are.
     ///
@@ -44,7 +49,7 @@ enum Subprocess {
     )
 
     /// Runs the tool off the caller's actor and suspends until it answers.
-    static func run(
+    public static func run(
         _ path: String,
         _ arguments: [String],
         timeout: TimeInterval = defaultTimeout
