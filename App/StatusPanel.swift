@@ -5,6 +5,7 @@ import ShieldStatCore
 struct StatusPanel: View {
     let model: StatusModel
     let settings: AppSettings
+    let detail: ListenerDetailModel
 
     /// Collapsed by default: these are the listeners the check judged harmless,
     /// so they are reassurance rather than information, and the panel should
@@ -29,6 +30,11 @@ struct StatusPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     factList
+                    // Above the lists and outside every one of their emptiness
+                    // checks. A failed read on launch leaves nothing raising and
+                    // nothing quiet, so anything conditional on having listeners
+                    // would hide this notice in the one case that needs it most.
+                    if model.listenersAreStale { staleListenersNotice }
                     if !model.verdict.raisingListeners.isEmpty {
                         Divider()
                         portList
@@ -112,6 +118,21 @@ struct StatusPanel: View {
         }
     }
 
+    /// Says that the listener half of the panel is out of date, because the
+    /// alternative to saying so is a verdict that looks current and is not.
+    ///
+    /// Orange rather than red: nothing has gone wrong on the machine, only in
+    /// this app's ability to look at it, and the two must not read the same.
+    private var staleListenersNotice: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+            Text("Could not re-read listening sockets. Everything below is the last successful read.")
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.caption2)
+        .foregroundStyle(.orange)
+    }
+
     /// Each listener is dismissible individually, because most of what a Mac
     /// listens on is expected and the warning is only useful once the expected
     /// things are out of the way.
@@ -144,10 +165,12 @@ struct StatusPanel: View {
                         .accessibilityLabel(listener.dismissDescription)
                     }
                     lookupButton(listener)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(listener.label).font(.system(.caption, design: .monospaced))
-                        if let note = listener.portDescription {
-                            Text(note).font(.caption2).foregroundStyle(.secondary)
+                    detailButton(listener) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(listener.label).font(.system(.caption, design: .monospaced))
+                            if let note = listener.portDescription {
+                                Text(note).font(.caption2).foregroundStyle(.secondary)
+                            }
                         }
                     }
                     Spacer()
@@ -196,6 +219,31 @@ struct StatusPanel: View {
         .accessibilityLabel("Look up \(listener.label)")
     }
 
+    /// Makes the name and port of a listener the thing you click to find out
+    /// what it is: which process holds it, where the binary lives, how long it
+    /// has been running, and what else it is listening on.
+    ///
+    /// A window rather than more of this panel. The popover is transient and
+    /// 340pt wide, so it would close under its own confirmation dialog and has
+    /// no room for the detail besides. `openWindow` and `NSApp.activate()` are
+    /// both needed to front a window from an `.accessory` app — see the note in
+    /// ShieldStatApp.
+    private func detailButton<Label: View>(
+        _ listener: ListeningSocket,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        Button {
+            detail.show(listener)
+            openWindow(id: ListenerDetailWindow.id)
+            NSApp.activate()
+        } label: {
+            label().contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Show what holds \(listener.label)")
+        .accessibilityLabel("Details for \(listener.label)")
+    }
+
     /// Listeners that cannot be reached, or that the user has accepted. Listed
     /// without any control, because there is nothing to decide about them — the
     /// point is to show that the check saw them and judged them harmless, rather
@@ -225,7 +273,9 @@ struct StatusPanel: View {
                     ForEach(model.localOnlyListeners, id: \.self) { listener in
                         HStack(spacing: 6) {
                             lookupButton(listener)
-                            Text(listener.label).font(.system(.caption2, design: .monospaced))
+                            detailButton(listener) {
+                                Text(listener.label).font(.system(.caption2, design: .monospaced))
+                            }
                             Spacer()
                             if let note = listener.portDescription {
                                 Text(note).font(.caption2)
@@ -240,11 +290,16 @@ struct StatusPanel: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, model.localOnlyListeners.isEmpty ? 0 : 4)
+                    // Clickable like every other row: a dismissal suppresses a
+                    // notice, it does not make "what is this" a less useful
+                    // question — arguably the opposite, for one accepted a while ago.
                     ForEach(model.dismissedListeners, id: \.self) { listener in
-                        Text(listener.label)
-                            .font(.system(.caption2, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        detailButton(listener) {
+                            Text(listener.label)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
             }

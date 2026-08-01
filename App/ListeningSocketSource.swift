@@ -1,5 +1,6 @@
 import Foundation
 import ShieldStatCore
+import ShieldStatSystem
 
 /// Enumerates listening TCP sockets, with process names where they can be had
 /// without privilege.
@@ -9,41 +10,28 @@ import ShieldStatCore
 /// without root, only for the current user's sockets. Using both names nearly
 /// everything — measured, 22 of 22 wildcard listeners on a real machine.
 enum ListeningSocketSource {
-    static func sockets() -> [ListeningSocket] {
-        ListeningSensor.parse(
-            // -v adds the process:pid column, which covers root-owned sockets
-            // that an unprivileged lsof cannot see at all.
-            netstat: run("/usr/sbin/netstat", ["-anv", "-p", "tcp"]) ?? "",
-            // +c 0 lifts the 9-character cap on the COMMAND column, which
-            // otherwise reports "com.docke" for com.docker.backend. The name is
-            // what the user reads and what a broad dismissal keys on, so a
-            // truncated one is not cosmetic.
-            lsof: run("/usr/sbin/lsof", ["+c", "0", "-iTCP", "-sTCP:LISTEN", "-P", "-n"]) ?? ""
-        )
-    }
+    /// Concurrently, because neither tool needs the other's answer and this runs
+    /// on a 60-second timer: two sequential reads cost twice the latency for
+    /// nothing.
+    ///
+    /// Nil when `netstat` could not be read at all — it timed out, or is not
+    /// there. That is emphatically not the same answer as an empty array, and
+    /// the difference is the whole point of the return type: an unreadable
+    /// netstat folded into "no listening sockets" is a confident all-clear
+    /// drawn from no evidence, which is the one mistake this app exists not to
+    /// make. A failed `lsof` is not the same problem — it costs process names,
+    /// which `ListeningSensor` already does without.
+    static func sockets() async -> [ListeningSocket]? {
+        // -v adds the process:pid column, which covers root-owned sockets that
+        // an unprivileged lsof cannot see at all.
+        async let netstat = Subprocess.run("/usr/sbin/netstat", ["-anv", "-p", "tcp"])
+        // +c 0 lifts the 9-character cap on the COMMAND column, which otherwise
+        // reports "com.docke" for com.docker.backend. The name is what the user
+        // reads and what a broad dismissal keys on, so a truncated one is not
+        // cosmetic.
+        async let lsof = Subprocess.run("/usr/sbin/lsof", ["+c", "0", "-iTCP", "-sTCP:LISTEN", "-P", "-n"])
 
-    private static func run(_ path: String, _ arguments: [String]) -> String? {
-        guard FileManager.default.isExecutableFile(atPath: path) else { return nil }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = arguments
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
-
-        // Read before waiting: a full pipe buffer would deadlock the child.
-        let data = try? pipe.fileHandleForReading.readToEnd()
-        process.waitUntilExit()
-
-        guard let data else { return nil }
-        return String(decoding: data, as: UTF8.self)
+        guard let netstat = await netstat else { return nil }
+        return ListeningSensor.parse(netstat: netstat, lsof: await lsof ?? "")
     }
 }

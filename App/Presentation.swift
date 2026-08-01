@@ -111,6 +111,45 @@ extension ListeningSocket {
     }
 }
 
+extension ListeningSocket {
+    /// The one thing about a listener that decides whether it matters, said in
+    /// the detail window where there is room to say it in full.
+    ///
+    /// Says what the bind *is*, never what it makes possible. Reachable is a
+    /// reserved term — it means a confirmed inbound connection, which no sensor
+    /// here can establish — so a wildcard bind is described as a wildcard bind
+    /// and the firewall, route and NAT that sit in front of it are left named
+    /// rather than assumed away.
+    var scopeDescription: String {
+        switch scope {
+        case .loopback: "Bound to loopback — nothing outside this Mac can reach it."
+        case .allInterfaces: "Bound to every interface. Network policy can still block remote connections."
+        case .specificAddress: "Bound to one interface address. Network policy can still block remote connections."
+        }
+    }
+}
+
+extension ListenerProcess {
+    /// Ownership is decided on uid, never on the user name. `ps` pads and
+    /// truncates the name column; the uid is neither, and it is what the kernel
+    /// actually checks when a signal is sent.
+    var isOwnedByCurrentUser: Bool { uid == getuid() }
+
+    /// Every address this process bound `port` on. Usually one entry, two when a
+    /// dual-stack service listens on both families.
+    func bindDescription(for port: UInt16) -> String {
+        let addresses = sockets.filter { $0.port == port }.map(\.addressDescription)
+        return addresses.isEmpty ? "port \(port)" : Set(addresses).sorted().joined(separator: ", ")
+    }
+
+    /// The rest of what this process is listening on — the context that turns
+    /// "some port" into "this is the dev server". Nil when there is no rest.
+    func otherPortsDescription(besides port: UInt16) -> String? {
+        let others = otherPorts(besides: port)
+        return others.isEmpty ? nil : others.map(String.init).joined(separator: ", ")
+    }
+}
+
 extension AddressClass {
     var title: String {
         switch self {

@@ -1,7 +1,13 @@
 # ShieldStat
 
 A passive macOS menu bar monitor of local security posture. It observes and reports; it never
-protects, blocks, or intervenes. Not a VPN, firewall, or antivirus.
+protects, blocks, or intervenes on its own. Not a VPN, firewall, or antivirus.
+
+Passive is about initiative, not capability. Nothing here decides by itself that a process should
+stop — no rules, no automatic action, nothing that runs while you are not looking. What the app does
+offer is a button: quitting a process you own is a user action, and refusing to carry it out would
+not make the app more honest, only less useful. The line is that every effect on the machine traces
+back to a press.
 
 ## Language
 
@@ -39,6 +45,21 @@ A TCP socket in LISTEN state, identified by its port and its Bind Scope, with th
 attached wherever it can be read without privilege. The same service listening over IPv4 and IPv6 is
 one Listening Socket, not two.
 _Avoid_: Open port, service, daemon
+
+**Socket Owner**:
+The pairing of one Listening Socket with the pid holding it, carrying the literal bind address rather
+than the Bind Scope it reduces to. Deliberately not part of a Listening Socket: that type collapses
+the IPv4 and IPv6 halves of one service into a single entry, and a pid or a literal address would
+split them back apart and change the count the verdict is drawn from. One port can have several
+Socket Owners, from a pre-forking server or an `SO_REUSEPORT` listener.
+_Avoid_: Owner, holder, binding
+
+**Listener Process**:
+What a [[Socket Owner]]'s pid turns out to be: its executable path, the user it runs as, when it
+started, what it was launched with, and every Listening Socket it holds. Read only when the user asks
+for it, never on the posture check's timer, and never fed back into a verdict — it answers "what is
+this", which is a question the app is not willing to answer on the user's behalf.
+_Avoid_: Process info, details, metadata
 
 **Dismissal**:
 A declaration that a Listening Socket is expected on this machine. Suppresses the `notice` it would

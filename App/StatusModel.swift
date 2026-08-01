@@ -12,6 +12,14 @@ final class StatusModel {
     private(set) var verdict = Verdict(state: .offline, severity: .ok, raisingFacts: [])
     private(set) var facts: [Fact] = []
     private(set) var listeners: [ListeningSocket] = []
+    /// The last attempt to enumerate listeners failed, so `listeners` and every
+    /// verdict drawn from it describe the machine as it was, not as it is.
+    ///
+    /// Shown rather than swallowed. Keeping the previous list is the safe half
+    /// of the answer — it errs toward leaving a warning up rather than dropping
+    /// one — but a stale warning presented as a current one is still the app
+    /// claiming to know something it does not.
+    private(set) var listenersAreStale = false
     /// Most recent first, capped. In memory only — nothing about the user's
     /// network history is written to disk.
     private(set) var history: [Transition] = []
@@ -41,6 +49,8 @@ final class StatusModel {
     private let routeEvents = RouteEventSource()
     private var safetyPoll: Timer?
     private var settleTimer: Timer?
+    private var evaluating = false
+    private var reevaluationPending = false
 
     /// Called after every evaluation so the menu bar item can redraw. The
     /// status item is AppKit, so it does not observe the model automatically.
@@ -141,7 +151,33 @@ final class StatusModel {
         onUpdate?()
     }
 
+    /// Kicks off an evaluation and returns; enumerating listeners means two
+    /// subprocesses, and a route event or a button press must not wait on them.
+    ///
+    /// Overlapping requests coalesce rather than run in parallel. A route event
+    /// arriving mid-read would otherwise start a second evaluation that could
+    /// finish first, so the older verdict would land last and the tracker would
+    /// see the two out of order. One at a time, with at most one more queued —
+    /// a third request during the same read is already covered by the second.
     func evaluate(now: Date = Date()) {
+        guard !evaluating else {
+            reevaluationPending = true
+            return
+        }
+        evaluating = true
+        Task {
+            await evaluateNow(now: now)
+            evaluating = false
+            if reevaluationPending {
+                reevaluationPending = false
+                // A fresh `now`: the queued request is about the machine as it
+                // is when it runs, not as it was when it was asked for.
+                evaluate()
+            }
+        }
+    }
+
+    private func evaluateNow(now: Date) async {
         let snapshot = SystemNetworkSource.snapshot()
         facts = ExposureSensor.facts(
             from: snapshot.addresses,
@@ -149,7 +185,19 @@ final class StatusModel {
         )
         // Listeners are always enumerated now: a wildcard listener is a notice
         // even behind NAT, so the verdict depends on them in every case.
-        listeners = ListeningSocketSource.sockets()
+        //
+        // A failed read keeps the previous list rather than clearing it. netstat
+        // returning nothing and netstat not answering are different facts, and
+        // only one of them means the machine stopped listening; treating the
+        // second as the first is a false all-clear that would clear itself off
+        // the menu bar for up to a minute.
+        if let read = await ListeningSocketSource.sockets() {
+            listeners = read
+            listenersAreStale = false
+        } else {
+            listenersAreStale = true
+            Self.log.notice("listener enumeration failed; keeping \(self.listeners.count, privacy: .public) from the last successful read")
+        }
         verdict = Policy.evaluate(
             facts,
             listening: listeners,

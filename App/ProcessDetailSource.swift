@@ -1,0 +1,148 @@
+import AppKit
+import Darwin
+import Foundation
+import OSLog
+import ShieldStatCore
+import ShieldStatSystem
+
+/// What happened when the user asked for a process to quit.
+enum QuitOutcome {
+    /// The signal, or the Quit event, went out. The process may still take a
+    /// moment to go; the next refresh is what confirms it.
+    case sent
+    /// The pid no longer belongs to the process shown. Nothing was sent.
+    case stale
+    case failed(String)
+}
+
+/// Reads who holds a listening socket, and acts on it when the user says so.
+///
+/// Everything here is fetched when a listener is clicked, never on the refresh
+/// path. The posture check runs on a timer and must stay cheap; this runs once
+/// per click and can afford two subprocesses. Fetching late also means the
+/// detail cannot be stale on arrival — if the socket closed in between, that is
+/// what the window says.
+enum ProcessDetailSource {
+    private static let log = Logger(subsystem: "dev.lucascaro.ShieldStat", category: "detail")
+
+    /// Every process holding a listening socket on `port`.
+    ///
+    /// Usually one. A pre-forking server or an `SO_REUSEPORT` listener gives
+    /// several, and they are all returned — picking a "main" one would be a
+    /// guess, and the window has room to show what is actually there.
+    ///
+    /// Thin by design, like every other source here: two subprocesses and two
+    /// syscalls, then `ProcessDetailSensor.detail` decides what they add up to.
+    static func detail(listeningOn port: UInt16) async -> ListenerDetail {
+        // Nil rather than "": a netstat that could not be read parses to no
+        // owners, which is indistinguishable from a netstat that named nobody.
+        // The classifier is given the difference rather than made to guess.
+        let owners = await Subprocess.run("/usr/sbin/netstat", ["-anv", "-p", "tcp"])
+            .map(ProcessDetailSensor.owners(netstat:))
+
+        let pids = owners.map { ProcessDetailSensor.pids(holding: port, in: $0) } ?? []
+        // Empty rather than nil when there is no pid to ask about: ps was not
+        // read because there was nothing to read it for, which is not a failure.
+        let lines: [Int32: ProcessLine]? = pids.isEmpty ? [:] : await processLines(for: pids)
+
+        // Looked up for every pid netstat named, including ones that turn out to
+        // have exited: proc_pidpath returning nothing for those is the same
+        // signal as ps having no row, and assigning nil simply leaves no entry.
+        var paths: [Int32: String] = [:]
+        for pid in pids { paths[pid] = executablePath(of: pid) }
+
+        var users: [UInt32: String] = [:]
+        for uid in Set(lines?.values.map(\.uid) ?? []) { users[uid] = userName(uid: uid) }
+
+        return ProcessDetailSensor.detail(
+            listeningOn: port,
+            owners: owners,
+            lines: lines,
+            paths: paths,
+            users: users
+        )
+    }
+
+    /// Sends the process a Quit, or a Force Quit when `force`.
+    ///
+    /// The identity check is the point of this function. A pid is reused once
+    /// its process exits, and the detail window is a real window that can sit
+    /// open for minutes — long enough for the pid on screen to have become
+    /// somebody else's. So the start instant is read again here, at the moment
+    /// of the press, and compared against the one captured when the window
+    /// opened. `startedAt` and not `elapsed`: elapsed time advances every
+    /// second, so comparing it would refuse every press.
+    static func quit(_ process: ListenerProcess, force: Bool) async -> QuitOutcome {
+        // A ps that could not be read is not evidence of anything. Signalling on
+        // it would be signalling unverified, and calling it stale would state
+        // that the pid now belongs to somebody else — which is exactly what went
+        // unchecked. Nothing is sent either way; only the wording differs, and
+        // the honest wording is the one that admits the check did not happen.
+        guard let lines = await processLines(for: [process.pid]) else {
+            log.notice("refusing to signal pid \(process.pid, privacy: .public): could not read the process table")
+            return .failed("Could not read the process table, so \(process.name) was not verified. Nothing was sent.")
+        }
+
+        // uid as well as the start instant: lstart has one-second granularity, so
+        // a pid reused inside the same second would otherwise compare equal.
+        guard let current = lines[process.pid],
+              current.startedAt == process.startedAt,
+              current.uid == process.uid
+        else {
+            log.notice("refusing to signal pid \(process.pid, privacy: .public): no longer the same process")
+            return .stale
+        }
+
+        // Checked again rather than trusted from the disabled button: the button
+        // state is a courtesy, this is the guarantee.
+        guard process.uid == getuid() else {
+            return .failed("ShieldStat cannot quit processes owned by \(process.user).")
+        }
+
+        // A GUI app gets a real Quit event, so it can save and close as it would
+        // from its own menu. NSRunningApplication is nil for anything that is
+        // not an app, which sorts daemons onto the signal path for free.
+        if let app = NSRunningApplication(processIdentifier: process.pid) {
+            let sent = force ? app.forceTerminate() : app.terminate()
+            return sent ? .sent : .failed("\(process.name) refused the request.")
+        }
+
+        guard kill(process.pid, force ? SIGKILL : SIGTERM) == 0 else {
+            return .failed(String(cString: strerror(errno)))
+        }
+        return .sent
+    }
+
+    /// `lstart` is the identity, `etime` is for reading, `uid` decides what the
+    /// user is allowed to do, and `args` is what the process was launched with —
+    /// readable here even for root-owned processes.
+    /// Nil when ps could not be read. Distinct from an empty dictionary, which
+    /// means ps answered and had no row for any of these pids — they have gone.
+    private static func processLines(for pids: [Int32]) async -> [Int32: ProcessLine]? {
+        let arguments = ["-o", "pid=,uid=,lstart=,etime=,args=", "-p", pids.map(String.init).joined(separator: ",")]
+        return await Subprocess.run("/bin/ps", arguments).map(ProcessDetailSensor.processes(ps:))
+    }
+
+    /// The kernel's answer for which binary is running, rather than `argv[0]`,
+    /// which is whatever the process was told to call itself. They differ in
+    /// practice — a Node process reports a bare `node` in argv while the kernel
+    /// names the interpreter it actually runs from. For a tool whose whole job
+    /// is "what is this process", the spoofable one is not good enough.
+    ///
+    /// Works for other users' processes, root-owned ones included; it returns 0
+    /// only when the pid is gone.
+    private static func executablePath(of pid: Int32) -> String? {
+        // PROC_PIDPATHINFO_MAXSIZE is a macro, so it does not reach Swift. It is
+        // defined as MAXPATHLEN * 4, and proc_pidpath fails outright on a buffer
+        // smaller than that rather than truncating.
+        var buffer = [UInt8](repeating: 0, count: Int(MAXPATHLEN) * 4)
+        let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+        guard length > 0 else { return nil }
+        return String(decoding: buffer[..<Int(length)], as: UTF8.self)
+    }
+
+    private static func userName(uid: UInt32) -> String {
+        guard let entry = getpwuid(uid), let name = entry.pointee.pw_name else { return "uid \(uid)" }
+        return String(cString: name)
+    }
+}

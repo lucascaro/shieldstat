@@ -81,6 +81,7 @@
 			name = ShieldStat;
 			packageProductDependencies = (
 				A1000090 /* ShieldStatCore */,
+				A1000093 /* ShieldStatSystem */,
 			);
 			productName = ShieldStat;
 			productReference = A1000020 /* ShieldStat.app */;
@@ -221,6 +222,10 @@
 		A1000090 /* ShieldStatCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ShieldStatCore;
+		};
+		A1000093 /* ShieldStatSystem */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ShieldStatSystem;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
