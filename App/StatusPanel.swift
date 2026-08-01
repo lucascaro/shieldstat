@@ -30,6 +30,11 @@ struct StatusPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     factList
+                    // Above the lists and outside every one of their emptiness
+                    // checks. A failed read on launch leaves nothing raising and
+                    // nothing quiet, so anything conditional on having listeners
+                    // would hide this notice in the one case that needs it most.
+                    if model.listenersAreStale { staleListenersNotice }
                     if !model.verdict.raisingListeners.isEmpty {
                         Divider()
                         portList
@@ -111,6 +116,21 @@ struct StatusPanel: View {
                 }
             }
         }
+    }
+
+    /// Says that the listener half of the panel is out of date, because the
+    /// alternative to saying so is a verdict that looks current and is not.
+    ///
+    /// Orange rather than red: nothing has gone wrong on the machine, only in
+    /// this app's ability to look at it, and the two must not read the same.
+    private var staleListenersNotice: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+            Text("Could not re-read listening sockets. Everything below is the last successful read.")
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.caption2)
+        .foregroundStyle(.orange)
     }
 
     /// Each listener is dismissible individually, because most of what a Mac

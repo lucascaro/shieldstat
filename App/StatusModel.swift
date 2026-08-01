@@ -12,6 +12,14 @@ final class StatusModel {
     private(set) var verdict = Verdict(state: .offline, severity: .ok, raisingFacts: [])
     private(set) var facts: [Fact] = []
     private(set) var listeners: [ListeningSocket] = []
+    /// The last attempt to enumerate listeners failed, so `listeners` and every
+    /// verdict drawn from it describe the machine as it was, not as it is.
+    ///
+    /// Shown rather than swallowed. Keeping the previous list is the safe half
+    /// of the answer — it errs toward leaving a warning up rather than dropping
+    /// one — but a stale warning presented as a current one is still the app
+    /// claiming to know something it does not.
+    private(set) var listenersAreStale = false
     /// Most recent first, capped. In memory only — nothing about the user's
     /// network history is written to disk.
     private(set) var history: [Transition] = []
@@ -177,7 +185,19 @@ final class StatusModel {
         )
         // Listeners are always enumerated now: a wildcard listener is a notice
         // even behind NAT, so the verdict depends on them in every case.
-        listeners = await ListeningSocketSource.sockets()
+        //
+        // A failed read keeps the previous list rather than clearing it. netstat
+        // returning nothing and netstat not answering are different facts, and
+        // only one of them means the machine stopped listening; treating the
+        // second as the first is a false all-clear that would clear itself off
+        // the menu bar for up to a minute.
+        if let read = await ListeningSocketSource.sockets() {
+            listeners = read
+            listenersAreStale = false
+        } else {
+            listenersAreStale = true
+            Self.log.notice("listener enumeration failed; keeping \(self.listeners.count, privacy: .public) from the last successful read")
+        }
         verdict = Policy.evaluate(
             facts,
             listening: listeners,

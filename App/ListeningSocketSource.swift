@@ -12,7 +12,15 @@ enum ListeningSocketSource {
     /// Concurrently, because neither tool needs the other's answer and this runs
     /// on a 60-second timer: two sequential reads cost twice the latency for
     /// nothing.
-    static func sockets() async -> [ListeningSocket] {
+    ///
+    /// Nil when `netstat` could not be read at all — it timed out, or is not
+    /// there. That is emphatically not the same answer as an empty array, and
+    /// the difference is the whole point of the return type: an unreadable
+    /// netstat folded into "no listening sockets" is a confident all-clear
+    /// drawn from no evidence, which is the one mistake this app exists not to
+    /// make. A failed `lsof` is not the same problem — it costs process names,
+    /// which `ListeningSensor` already does without.
+    static func sockets() async -> [ListeningSocket]? {
         // -v adds the process:pid column, which covers root-owned sockets that
         // an unprivileged lsof cannot see at all.
         async let netstat = Subprocess.run("/usr/sbin/netstat", ["-anv", "-p", "tcp"])
@@ -22,6 +30,7 @@ enum ListeningSocketSource {
         // cosmetic.
         async let lsof = Subprocess.run("/usr/sbin/lsof", ["+c", "0", "-iTCP", "-sTCP:LISTEN", "-P", "-n"])
 
-        return ListeningSensor.parse(netstat: await netstat ?? "", lsof: await lsof ?? "")
+        guard let netstat = await netstat else { return nil }
+        return ListeningSensor.parse(netstat: netstat, lsof: await lsof ?? "")
     }
 }
