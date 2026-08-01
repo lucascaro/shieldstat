@@ -114,6 +114,21 @@ public struct ListenerProcess: Sendable, Equatable, Hashable, Codable {
     }
 }
 
+/// What a detail read found. Nothing found is not one answer but two, and they
+/// are different facts about the machine: netstat can list a listening socket
+/// and name no process for it at all — the process column is blank on some rows,
+/// and those are exactly the listeners that cannot be labelled — or it can name
+/// a pid that has since exited. Collapsing them into one message makes the app
+/// say "nothing is listening" about a socket that is listening.
+public enum ListenerDetail: Sendable, Equatable {
+    case processes([ListenerProcess])
+    /// netstat lists the socket but names no process holding it. The socket is
+    /// real; what holds it is what could not be determined without privilege.
+    case unattributed
+    /// Every pid netstat named for the port has gone since it was read.
+    case gone
+}
+
 /// Reads who owns a listening socket, and what that process is.
 /// Pure: parsing only, the caller supplies the text.
 public enum ProcessDetailSensor {
@@ -165,6 +180,62 @@ public enum ProcessDetailSensor {
             return pid
         }
         return nil
+    }
+
+    /// The pids holding `port`, deduplicated and ordered.
+    ///
+    /// Shared rather than computed twice: the caller needs this list to build
+    /// the `ps` invocation before there is anything to classify, and `detail`
+    /// needs the same list to classify it. Two copies of the rule is one copy
+    /// too many for something that decides which processes get shown.
+    public static func pids(holding port: UInt16, in owners: [SocketOwner]) -> [Int32] {
+        Array(Set(owners.filter { $0.port == port }.map(\.pid))).sorted()
+    }
+
+    /// Turns everything read about a port into the one answer the window shows.
+    ///
+    /// Every syscall stays with the caller — `paths` is `proc_pidpath` and
+    /// `users` is `getpwuid`, both looked up before this is called — so the
+    /// decision itself is data in and data out, and the three ways a port can
+    /// come back can be checked without a machine in a particular state.
+    ///
+    /// A pid missing from `paths` is ordinary, not an error: `proc_pidpath`
+    /// answers for other users' processes but not for one that has exited, and
+    /// the name falls back to the pid rather than the window going blank.
+    public static func detail(
+        listeningOn port: UInt16,
+        owners: [SocketOwner],
+        lines: [Int32: ProcessLine],
+        paths: [Int32: String],
+        users: [UInt32: String]
+    ) -> ListenerDetail {
+        let pids = pids(holding: port, in: owners)
+        guard !pids.isEmpty else { return .unattributed }
+
+        // A pid netstat still lists can already be gone — measured, 2 of 13 on a
+        // real machine. No ps row means no process, so it is dropped rather than
+        // shown half-populated.
+        let found = pids.compactMap { pid -> ListenerProcess? in
+            guard let line = lines[pid] else { return nil }
+            let path = paths[pid]
+
+            return ListenerProcess(
+                pid: pid,
+                uid: line.uid,
+                name: path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "pid \(pid)",
+                user: users[line.uid] ?? "uid \(line.uid)",
+                startedAt: line.startedAt,
+                elapsed: line.elapsed,
+                arguments: line.arguments,
+                executablePath: path,
+                // Every port this pid holds, not only the one asked about:
+                // `otherPorts(besides:)` is what turns "some port" into "this is
+                // the dev server", and it reads this.
+                sockets: owners.filter { $0.pid == pid }.sorted { $0.port < $1.port }
+            )
+        }
+
+        return found.isEmpty ? .gone : .processes(found)
     }
 
     /// Parses `ps -o pid=,uid=,lstart=,etime=,args=`, keyed by pid.

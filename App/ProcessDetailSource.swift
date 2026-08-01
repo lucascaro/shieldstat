@@ -14,21 +14,6 @@ enum QuitOutcome {
     case failed(String)
 }
 
-/// What the detail read found. Nothing found is not one answer but two, and
-/// they are different facts about the machine: netstat can list a listening
-/// socket and name no process for it at all — the process column is blank on
-/// some rows, and those are exactly the listeners the panel cannot label — or
-/// it can name a pid that has since exited. Collapsing them into one message
-/// makes the app say "nothing is listening" about a socket that is listening.
-enum ListenerDetail: Equatable {
-    case processes([ListenerProcess])
-    /// netstat lists the socket but names no process holding it. The socket is
-    /// real; what holds it is what could not be determined without privilege.
-    case unattributed
-    /// Every pid netstat named for the port has gone since it was read.
-    case gone
-}
-
 /// Reads who holds a listening socket, and acts on it when the user says so.
 ///
 /// Everything here is fetched when a listener is clicked, never on the refresh
@@ -44,41 +29,33 @@ enum ProcessDetailSource {
     /// Usually one. A pre-forking server or an `SO_REUSEPORT` listener gives
     /// several, and they are all returned — picking a "main" one would be a
     /// guess, and the window has room to show what is actually there.
+    ///
+    /// Thin by design, like every other source here: two subprocesses and two
+    /// syscalls, then `ProcessDetailSensor.detail` decides what they add up to.
     static func detail(listeningOn port: UInt16) async -> ListenerDetail {
         let owners = await ProcessDetailSensor.owners(
             netstat: Subprocess.run("/usr/sbin/netstat", ["-anv", "-p", "tcp"]) ?? ""
         )
 
-        let pids = Array(Set(owners.filter { $0.port == port }.map(\.pid))).sorted()
-        // No pid at all is not the same as a pid that has gone. netstat leaves
-        // the process column blank on some rows, and those sockets still appear
-        // in the panel — a wildcard one is raised in red — so this is reached by
-        // clicking the very listener the user most wants named.
-        guard !pids.isEmpty else { return .unattributed }
+        let pids = ProcessDetailSensor.pids(holding: port, in: owners)
+        let lines: [Int32: ProcessLine] = pids.isEmpty ? [:] : await processLines(for: pids)
 
-        let lines = await processLines(for: pids)
+        // Looked up for every pid netstat named, including ones that turn out to
+        // have exited: proc_pidpath returning nothing for those is the same
+        // signal as ps having no row, and assigning nil simply leaves no entry.
+        var paths: [Int32: String] = [:]
+        for pid in pids { paths[pid] = executablePath(of: pid) }
 
-        // A pid netstat still lists can already be gone — measured, 2 of 13 on a
-        // real machine. No ps row means no process, so it is dropped rather than
-        // shown half-populated.
-        let found = pids.compactMap { pid -> ListenerProcess? in
-            guard let line = lines[pid] else { return nil }
-            let path = executablePath(of: pid)
+        var users: [UInt32: String] = [:]
+        for uid in Set(lines.values.map(\.uid)) { users[uid] = userName(uid: uid) }
 
-            return ListenerProcess(
-                pid: pid,
-                uid: line.uid,
-                name: path.map { ($0 as NSString).lastPathComponent } ?? "pid \(pid)",
-                user: userName(uid: line.uid),
-                startedAt: line.startedAt,
-                elapsed: line.elapsed,
-                arguments: line.arguments,
-                executablePath: path,
-                sockets: owners.filter { $0.pid == pid }.sorted { $0.port < $1.port }
-            )
-        }
-
-        return found.isEmpty ? .gone : .processes(found)
+        return ProcessDetailSensor.detail(
+            listeningOn: port,
+            owners: owners,
+            lines: lines,
+            paths: paths,
+            users: users
+        )
     }
 
     /// Sends the process a Quit, or a Force Quit when `force`.

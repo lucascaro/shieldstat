@@ -167,6 +167,94 @@ struct ProcessDetailSensorTests {
         #expect(lines[4371] == nil)
     }
 
+    /// The empty answer is two different facts and they must not read alike.
+    /// Port 7000 is in the fixture with a blank process column: it is listening,
+    /// it reaches the panel, and it has no pid — so it is the one a user is
+    /// likeliest to click, and the one "nothing is listening" would libel.
+    @Test("A port with no pid in netstat is unattributed, not gone")
+    func portWithoutAPidIsUnattributed() {
+        let owners = ProcessDetailSensor.owners(netstat: realNetstat)
+        let detail = ProcessDetailSensor.detail(
+            listeningOn: 7000, owners: owners, lines: [:], paths: [:], users: [:]
+        )
+        #expect(detail == .unattributed)
+    }
+
+    @Test("A port whose every pid has exited is gone, not unattributed")
+    func portWhosePidsExitedIsGone() {
+        let owners = ProcessDetailSensor.owners(netstat: realNetstat)
+        // netstat named 14920 for port 916; ps has no row for it any more.
+        let detail = ProcessDetailSensor.detail(
+            listeningOn: 916, owners: owners, lines: [:], paths: [:], users: [:]
+        )
+        #expect(detail == .gone)
+    }
+
+    @Test("Only the pids that still have a ps row are reported")
+    func partialSurvivalReportsTheSurvivors() {
+        let owners = ProcessDetailSensor.owners(netstat: reusePortNetstat)
+        let line = ProcessLine(
+            pid: 441, uid: 501, startedAt: "Thu May 21 14:22:40 2026",
+            elapsed: "01:23", arguments: "nginx: master process"
+        )
+        let detail = ProcessDetailSensor.detail(
+            listeningOn: 8080,
+            owners: owners,
+            lines: [441: line],
+            paths: [441: "/opt/homebrew/bin/nginx"],
+            users: [501: "lucascaro"]
+        )
+        guard case .processes(let found) = detail else {
+            Issue.record("expected processes, got \(detail)")
+            return
+        }
+        #expect(found.map(\.pid) == [441])
+        #expect(found[0].name == "nginx")
+        #expect(found[0].user == "lucascaro")
+    }
+
+    /// proc_pidpath answers for other users' processes but not for one that has
+    /// exited between the two reads, and getpwuid can miss a uid from a
+    /// directory service that is not answering. Neither may blank the window.
+    @Test("A missing path or user name falls back to the pid and the uid")
+    func missingLookupsFallBack() {
+        let owners = ProcessDetailSensor.owners(netstat: realNetstat)
+        let line = ProcessLine(
+            pid: 14919, uid: 0, startedAt: "Thu May 21 14:22:40 2026",
+            elapsed: "01:23", arguments: "/usr/sbin/rpc.statd"
+        )
+        let detail = ProcessDetailSensor.detail(
+            listeningOn: 8021, owners: owners, lines: [14919: line], paths: [:], users: [:]
+        )
+        guard case .processes(let found) = detail else {
+            Issue.record("expected processes, got \(detail)")
+            return
+        }
+        #expect(found[0].name == "pid 14919")
+        #expect(found[0].user == "uid 0")
+        #expect(found[0].executablePath == nil)
+    }
+
+    /// The sockets a process carries are all of its ports, not just the one
+    /// asked about — otherPorts(besides:) is computed from them.
+    @Test("A process carries every port it holds, not only the one asked for")
+    func processCarriesAllItsPorts() {
+        let owners = ProcessDetailSensor.owners(netstat: realNetstat)
+        let line = ProcessLine(
+            pid: 14920, uid: 0, startedAt: "Thu May 21 14:22:40 2026",
+            elapsed: "01:23", arguments: "/usr/sbin/rpc.lockd"
+        )
+        let detail = ProcessDetailSensor.detail(
+            listeningOn: 916, owners: owners, lines: [14920: line], paths: [:], users: [:]
+        )
+        guard case .processes(let found) = detail else {
+            Issue.record("expected processes, got \(detail)")
+            return
+        }
+        #expect(found[0].sockets.map(\.port) == [916, 921])
+        #expect(found[0].otherPorts(besides: 916) == [921])
+    }
+
     @Test("Other ports exclude the one being looked at")
     func otherPortsExcludesSelf() {
         let owners = ProcessDetailSensor.owners(netstat: realNetstat).filter { $0.pid == 14920 }
