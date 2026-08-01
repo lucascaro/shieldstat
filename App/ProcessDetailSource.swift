@@ -34,12 +34,16 @@ enum ProcessDetailSource {
     /// Thin by design, like every other source here: two subprocesses and two
     /// syscalls, then `ProcessDetailSensor.detail` decides what they add up to.
     static func detail(listeningOn port: UInt16) async -> ListenerDetail {
-        let owners = await ProcessDetailSensor.owners(
-            netstat: Subprocess.run("/usr/sbin/netstat", ["-anv", "-p", "tcp"]) ?? ""
-        )
+        // Nil rather than "": a netstat that could not be read parses to no
+        // owners, which is indistinguishable from a netstat that named nobody.
+        // The classifier is given the difference rather than made to guess.
+        let owners = await Subprocess.run("/usr/sbin/netstat", ["-anv", "-p", "tcp"])
+            .map(ProcessDetailSensor.owners(netstat:))
 
-        let pids = ProcessDetailSensor.pids(holding: port, in: owners)
-        let lines: [Int32: ProcessLine] = pids.isEmpty ? [:] : await processLines(for: pids)
+        let pids = owners.map { ProcessDetailSensor.pids(holding: port, in: $0) } ?? []
+        // Empty rather than nil when there is no pid to ask about: ps was not
+        // read because there was nothing to read it for, which is not a failure.
+        let lines: [Int32: ProcessLine]? = pids.isEmpty ? [:] : await processLines(for: pids)
 
         // Looked up for every pid netstat named, including ones that turn out to
         // have exited: proc_pidpath returning nothing for those is the same
@@ -48,7 +52,7 @@ enum ProcessDetailSource {
         for pid in pids { paths[pid] = executablePath(of: pid) }
 
         var users: [UInt32: String] = [:]
-        for uid in Set(lines.values.map(\.uid)) { users[uid] = userName(uid: uid) }
+        for uid in Set(lines?.values.map(\.uid) ?? []) { users[uid] = userName(uid: uid) }
 
         return ProcessDetailSensor.detail(
             listeningOn: port,
@@ -69,9 +73,19 @@ enum ProcessDetailSource {
     /// opened. `startedAt` and not `elapsed`: elapsed time advances every
     /// second, so comparing it would refuse every press.
     static func quit(_ process: ListenerProcess, force: Bool) async -> QuitOutcome {
+        // A ps that could not be read is not evidence of anything. Signalling on
+        // it would be signalling unverified, and calling it stale would state
+        // that the pid now belongs to somebody else — which is exactly what went
+        // unchecked. Nothing is sent either way; only the wording differs, and
+        // the honest wording is the one that admits the check did not happen.
+        guard let lines = await processLines(for: [process.pid]) else {
+            log.notice("refusing to signal pid \(process.pid, privacy: .public): could not read the process table")
+            return .failed("Could not read the process table, so \(process.name) was not verified. Nothing was sent.")
+        }
+
         // uid as well as the start instant: lstart has one-second granularity, so
         // a pid reused inside the same second would otherwise compare equal.
-        guard let current = await processLines(for: [process.pid])[process.pid],
+        guard let current = lines[process.pid],
               current.startedAt == process.startedAt,
               current.uid == process.uid
         else {
@@ -102,9 +116,11 @@ enum ProcessDetailSource {
     /// `lstart` is the identity, `etime` is for reading, `uid` decides what the
     /// user is allowed to do, and `args` is what the process was launched with —
     /// readable here even for root-owned processes.
-    private static func processLines(for pids: [Int32]) async -> [Int32: ProcessLine] {
+    /// Nil when ps could not be read. Distinct from an empty dictionary, which
+    /// means ps answered and had no row for any of these pids — they have gone.
+    private static func processLines(for pids: [Int32]) async -> [Int32: ProcessLine]? {
         let arguments = ["-o", "pid=,uid=,lstart=,etime=,args=", "-p", pids.map(String.init).joined(separator: ",")]
-        return await ProcessDetailSensor.processes(ps: Subprocess.run("/bin/ps", arguments) ?? "")
+        return await Subprocess.run("/bin/ps", arguments).map(ProcessDetailSensor.processes(ps:))
     }
 
     /// The kernel's answer for which binary is running, rather than `argv[0]`,

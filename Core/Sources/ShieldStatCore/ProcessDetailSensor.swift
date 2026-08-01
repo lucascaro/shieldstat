@@ -127,6 +127,12 @@ public enum ListenerDetail: Sendable, Equatable {
     case unattributed
     /// Every pid netstat named for the port has gone since it was read.
     case gone
+    /// A tool could not be read at all — it timed out, or is not there. Distinct
+    /// from every case above, all of which are claims about the machine. This is
+    /// the absence of a claim, and the two must never be shown as the same
+    /// thing: "no process holds this port" and "the question went unanswered"
+    /// are opposite amounts of knowledge.
+    case unreadable
 }
 
 /// Reads who owns a listening socket, and what that process is.
@@ -202,15 +208,23 @@ public enum ProcessDetailSensor {
     /// A pid missing from `paths` is ordinary, not an error: `proc_pidpath`
     /// answers for other users' processes but not for one that has exited, and
     /// the name falls back to the pid rather than the window going blank.
+    ///
+    /// `owners` and `lines` are optional because a tool that could not be read
+    /// must not arrive here as an empty one. An unreadable netstat looks exactly
+    /// like a netstat that named nobody, and an unreadable ps exactly like a
+    /// process that has exited — in both cases the app would state as fact
+    /// something it failed to find out.
     public static func detail(
         listeningOn port: UInt16,
-        owners: [SocketOwner],
-        lines: [Int32: ProcessLine],
+        owners: [SocketOwner]?,
+        lines: [Int32: ProcessLine]?,
         paths: [Int32: String],
         users: [UInt32: String]
     ) -> ListenerDetail {
+        guard let owners else { return .unreadable }
         let pids = pids(holding: port, in: owners)
         guard !pids.isEmpty else { return .unattributed }
+        guard let lines else { return .unreadable }
 
         // A pid netstat still lists can already be gone — measured, 2 of 13 on a
         // real machine. No ps row means no process, so it is dropped rather than

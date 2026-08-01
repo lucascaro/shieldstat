@@ -70,6 +70,17 @@ struct ListenerDetailView: View {
                     Text("Nothing is listening on port \(String(socket.port)) any more.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                case .unreadable:
+                    // Not a claim about the port at all. Every other branch here
+                    // says something about the machine; this one says the
+                    // question went unanswered, and must not be mistaken for an
+                    // answer of "nothing".
+                    Text("Could not read the process table. Nothing is known about port \(String(socket.port)) right now.")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                    Text("Refresh to try again.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 case .unattributed:
                     // The socket is real and still listening — it is on screen
                     // behind this window. Saying "nothing is listening" here

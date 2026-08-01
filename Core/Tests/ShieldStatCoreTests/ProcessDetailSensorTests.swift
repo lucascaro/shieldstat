@@ -180,6 +180,41 @@ struct ProcessDetailSensorTests {
         #expect(detail == .unattributed)
     }
 
+    /// An unreadable netstat and a netstat that named nobody produce the same
+    /// empty data, so the read failure has to arrive as nil rather than as an
+    /// empty array. Otherwise a timed-out tool is reported as a fact about the
+    /// machine — the same false confidence the panel's stale flag exists to stop.
+    @Test("An unreadable netstat is unreadable, not unattributed")
+    func unreadableNetstatIsNotUnattributed() {
+        let detail = ProcessDetailSensor.detail(
+            listeningOn: 7000, owners: nil, lines: nil, paths: [:], users: [:]
+        )
+        #expect(detail == .unreadable)
+    }
+
+    /// Reached only once netstat has named a pid: at that point the port is
+    /// known to be held, so an unreadable ps is a failure to identify the
+    /// holder, never evidence that it has gone.
+    @Test("An unreadable ps is unreadable, not gone")
+    func unreadablePSIsNotGone() {
+        let owners = ProcessDetailSensor.owners(netstat: realNetstat)
+        let detail = ProcessDetailSensor.detail(
+            listeningOn: 916, owners: owners, lines: nil, paths: [:], users: [:]
+        )
+        #expect(detail == .unreadable)
+    }
+
+    /// The ordering matters: with no pid for the port there is nothing to ask ps
+    /// about, so ps never runs and its absence is not a failure.
+    @Test("A port with no pid is unattributed even when ps was never read")
+    func noPidOutranksAnUnreadPS() {
+        let owners = ProcessDetailSensor.owners(netstat: realNetstat)
+        let detail = ProcessDetailSensor.detail(
+            listeningOn: 7000, owners: owners, lines: nil, paths: [:], users: [:]
+        )
+        #expect(detail == .unattributed)
+    }
+
     @Test("A port whose every pid has exited is gone, not unattributed")
     func portWhosePidsExitedIsGone() {
         let owners = ProcessDetailSensor.owners(netstat: realNetstat)
