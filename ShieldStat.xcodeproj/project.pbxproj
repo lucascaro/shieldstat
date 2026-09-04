@@ -26,7 +26,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000091 /* ShieldStatCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
