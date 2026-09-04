@@ -9,3 +9,6 @@ xcuserdata/
 .claude/
 skills-lock.json
 .scratch/
+
+# hive worktrees
+.worktrees
